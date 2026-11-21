@@ -34,10 +34,11 @@ label{display:block;font-size:15.5px;color:var(--sub);margin-top:10px}
 .badge.p{background:var(--perb);color:var(--per)}
 .amt{font-weight:700;font-variant-numeric:tabular-nums}
 .fab{position:fixed;right:16px;bottom:calc(20px + env(safe-area-inset-bottom));padding:14px 22px;font-size:18.5px;box-shadow:0 8px 22px color-mix(in srgb,var(--pri) 60%,transparent)}
-#sheet{position:fixed;inset:0;background:var(--ov);display:none;align-items:flex-end;z-index:20}
-#sheet.on{display:flex}
-#sheet>div{background:var(--bg);width:100%;max-width:560px;margin:0 auto;max-height:90vh;overflow:auto;border-radius:30px 30px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(0,0,0,.12)}
-#sheet h3{margin:0 0 6px}
+#sheet,#sheet2{position:fixed;inset:0;background:var(--ov);display:none;align-items:flex-end;z-index:20}
+#sheet.on,#sheet2.on{display:flex}
+#sheet2{z-index:25}
+#sheet>div,#sheet2>div{background:var(--bg);width:100%;max-width:560px;margin:0 auto;max-height:90vh;overflow:auto;border-radius:30px 30px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(0,0,0,.12)}
+#sheet h3,#sheet2 h3{margin:0 0 6px}
 .btns{display:flex;gap:8px;margin-top:14px}
 .btns button{flex:1}
 #toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top));transform:translateX(-50%);background:var(--tbg);color:var(--tfg);padding:10px 18px;border-radius:99px;z-index:30;display:none;max-width:90%}
@@ -82,6 +83,16 @@ label.chk{display:flex;align-items:center;gap:8px;margin:0;color:var(--tx);font-
 .num{flex:none;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
 a.lk{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99px;border:2px solid var(--bd);background:var(--card);color:var(--tx);text-decoration:none;font-weight:700;font-size:16px}
 .ldone{text-decoration:line-through;opacity:.6}
+.tcard{padding:14px 16px}
+.tn{font-size:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;text-align:left}
+.pill{flex:none;font-size:14px;font-weight:700;padding:3px 12px;border-radius:99px;background:var(--pri);color:var(--on)}
+.pill.on{background:#9bd9b0;color:#24432f}
+.pill.end{background:transparent;border:2px solid var(--bd);color:var(--sub);padding:1px 10px}
+.avs{display:flex;flex:none}
+.av{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid var(--card);margin-left:-6px}
+.avs .av:first-child{margin-left:0}
+.av2{background:var(--sub)}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 </style>
 </head>
 <body>
@@ -89,6 +100,7 @@ a.lk{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99
 <div id="art" aria-hidden="true"><div class="w"></div><div class="i"></div></div>
 <div id="app"></div>
 <div id="sheet"><div id="sbody"></div></div>
+<div id="sheet2"><div id="sbody2"></div></div>
 <div id="toast"></div>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
@@ -122,6 +134,8 @@ let S={info:{},plists:null,slists:[],mapOpen:true,user:null,local:JSON.parse(ls(
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2600)}
 function sheet(h){$('#sbody').innerHTML=h;$('#sheet').classList.add('on')}
 function closeSheet(){$('#sheet').classList.remove('on')}
+function sheet2(h){$('#sbody2').innerHTML=h;$('#sheet2').classList.add('on')}
+function closeSheet2(){$('#sheet2').classList.remove('on')}
 
 /* ---------- trips list ---------- */
 function addTrip(id,name){
@@ -255,11 +269,35 @@ function origView(){
 
 /* ---------- views ---------- */
 function loginBtn(){return S.user?`<button class="g" data-a="logout">登出</button>`:`<button class="g" data-a="login">登入</button>`}
+function tripStatus(i){
+  if(!i||!i.start)return null;
+  const today=ymd(new Date()),a=i.start,b=i.end&&i.end>=a?i.end:a;
+  const diff=(x,y)=>Math.round((new Date(y+'T00:00:00')-new Date(x+'T00:00:00'))/864e5);
+  if(today<a)return {g:1,t:'還有 '+diff(today,a)+' 天出發',c:'up'};
+  if(today<=b)return {g:0,t:'旅行中 第 '+(diff(a,today)+1)+' 天',c:'on'};
+  return {g:3,t:'已結束',c:'end'};
+}
+function tripCards(ts){
+  if(!ts.length)return `<div class="card sub" style="text-align:center">${ICON}<br>還沒有旅程，建立第一趟吧。</div>`;
+  const rows=ts.map(t=>{const i=S.info[t.id],ok=i&&i!=='l';return {t,i:ok?i:null,st:ok?tripStatus(i):null}});
+  const g=r=>r.st?r.st.g:2;
+  rows.sort((x,y)=>g(x)-g(y)||(g(x)==1?(x.i.start<y.i.start?-1:1):g(x)==3?((y.i.end||y.i.start)<(x.i.end||x.i.start)?-1:1):0));
+  const titles=['旅行中','即將出發','還沒排日期','已結束'];
+  let last=-1,h='';
+  rows.forEach(r=>{
+    if(g(r)!==last){last=g(r);h+=`<div class="sub" style="margin:14px 4px 6px"><b>${titles[last]}</b></div>`}
+    const {t,i,st}=r,mem=i?(i.members||[]):[];
+    const av=mem.slice(0,5).map((m,k)=>`<span class="av" style="background:${PAL[k%PAL.length]}">${esc([...m.name][0]||'?')}</span>`).join('')+(mem.length>5?`<span class="av av2">+${mem.length-5}</span>`:'');
+    const n=i&&i.start&&i.end&&i.end>i.start?Math.round((new Date(i.end+'T00:00:00')-new Date(i.start+'T00:00:00'))/864e5)+1:0;
+    h+=`<button class="card trip tcard" data-a="open" data-v="${esc(t.id)}"><div class="row" style="margin:0"><b class="tn">${esc(i&&i.name?i.name:t.name)}</b>${st?`<span class="pill ${st.c}">${st.t}</span>`:''}</div>${i&&i.start?`<div class="sub" style="margin:2px 0 8px">${esc(fmtRange(i.start,i.end))}${n?' · '+n+' 天':''}</div>`:''}${mem.length?`<div class="row" style="margin:0;justify-content:flex-start;gap:10px"><span class="avs">${av}</span><span class="sub ell">${esc(mem.map(m=>m.name).join('、'))}</span></div>`:''}</button>`;
+  });
+  return h;
+}
 function home(){
   const ts=allTrips().filter(t=>{const i=S.info[t.id];return !(i&&i!=='l'&&i.deleted)});
   return `<header><h1>${ICON}<span class="br">旅遊記帳</span></h1><button class="g" data-a="set">設定</button>${loginBtn()}</header><main>
   ${S.user?`<p class="sub">已登入：${esc(S.user.displayName||S.user.email)}，旅程會跟著帳號走</p>`:`<p class="sub">登入後換手機也找得回旅程。朋友用連結就能參與，不用登入。</p>`}
-  ${ts.length?ts.map(t=>{const i=S.info[t.id],ok=i&&i!=='l',dt=ok?fmtRange(i.start,i.end):'',nm=ok?(i.members||[]).map(m=>m.name).join('、'):'';return `<button class="card trip" data-a="open" data-v="${esc(t.id)}">${dt?`<div class="sub">${esc(dt)}</div>`:''}<b>${esc(ok&&i.name?i.name:t.name)}</b>${nm?`<div class="sub">旅伴：${esc(nm)}</div>`:''}</button>`}).join(''):`<div class="card sub" style="text-align:center">${ICON}<br>還沒有旅程，建立第一趟吧。</div>`}
+  ${tripCards(ts)}
   <button class="fab" data-a="newTrip">＋ 新增旅程</button></main>`;
 }
 function lab(e){
@@ -284,7 +322,7 @@ function tripView(){
     ${list.length?list.map(e=>{
       const d=e.ts?.toDate?.();
       return `<button class="card trip" data-a="edit" data-v="${e.id}"><div class="row"><b>${esc(e.note||'未命名')}</b><span class="amt">${money(e.amount,e.cur||S.trip.cur)}${(e.cur||S.trip.cur)!=base?`<small class="sub"> ≈${money(e.amount*rate(e.cur),base)}</small>`:''}</span></div>
-      <div class="row sub"><span>${e.cat?esc(catName(e.cat))+' · ':''}${esc(Object.keys(e.payers).map(nm).join('、'))} 付${d?' · '+d.toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'}):''}</span>${lab(e)}</div></button>`}).join(''):`<div class="card sub">沒有符合的帳目。按右下角「＋」快速記一筆。</div>`}
+      <div class="row sub"><span>${e.cat?esc(catLabel(e))+' · ':''}${esc(Object.keys(e.payers).map(nm).join('、'))} 付${d?' · '+d.toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'}):''}</span>${lab(e)}</div></button>`}).join(''):`<div class="card sub">沒有符合的帳目。按右下角「＋」快速記一筆。</div>`}
     <button class="fab" data-a="add">${f=='per'?'＋ 記個人花費':'＋ 記一筆'}</button>`;
   }else{
     const c=calc();
@@ -316,10 +354,20 @@ const PAL=['#d9775f','#4a8fcf','#5fa65a','#b560a8','#d9a23a','#3fa3a1'];
 const PIE=['#e8a598','#9fc5e8','#b6d7a8','#ffe599','#d5a6bd','#a2c4c9','#f9cb9c','#b4a7d6'];
 const MODES=['步行','電車','公車','計程車','自駕','飛機','船','其他'];
 const TMODE={'步行':'walking','電車':'transit','公車':'transit','計程車':'driving','自駕':'driving'};
-const DEFCATS=[{id:'food',name:'食'},{id:'cloth',name:'衣'},{id:'stay',name:'住'},{id:'move',name:'行'},{id:'other',name:'其他'}];
+const DEFCATS=[
+ {id:'food',name:'食',subs:[{id:'f1',name:'餐廳'},{id:'f2',name:'小吃'},{id:'f3',name:'飲料'}]},
+ {id:'stay',name:'住',subs:[{id:'s1',name:'住宿'}]},
+ {id:'move',name:'行',subs:[{id:'m1',name:'機票'},{id:'m2',name:'電車'},{id:'m3',name:'租車'},{id:'m4',name:'計程車'}]},
+ {id:'play',name:'玩',subs:[{id:'p1',name:'門票'},{id:'p2',name:'活動'}]},
+ {id:'shop',name:'買',subs:[{id:'b1',name:'紀念品'},{id:'b2',name:'送人伴手禮'},{id:'b3',name:'衣物'}]},
+ {id:'other',name:'其他',subs:[{id:'o1',name:'保險'},{id:'o2',name:'簽證'},{id:'o3',name:'網路'},{id:'o4',name:'雜支'}]}];
+const cid=id=>({cloth:'shop'}[id]||id);
+const subName=(cat,sub)=>cats().find(c=>c.id==cid(cat))?.subs?.find(u=>u.id==sub)?.name||'';
+const catLabel=e=>catName(e.cat)+(e.sub&&subName(e.cat,e.sub)?' › '+subName(e.cat,e.sub):'');
 const cats=()=>S.trip?.cats?.length?S.trip.cats:DEFCATS;
-const catName=id=>cats().find(c=>c.id==id)?.name||'未分類';
-const catChips=()=>cats().map(c=>`<button class="${S.fcat==c.id?'':'g'}" data-a="pcat" data-v="${c.id}">${esc(c.name)}</button>`).join('');
+const catName=id=>cats().find(c=>c.id==cid(id))?.name||'未分類';
+const catChips=()=>cats().map(c=>`<button class="${cid(S.fcat)==c.id?'':'g'}" data-a="pcat" data-v="${c.id}">${esc(c.name)}</button>`).join('')+'';
+const subChips=()=>{const c=cats().find(x=>x.id==cid(S.fcat));return (c?.subs||[]).map(u=>`<button class="${S.fsub==u.id?'':'g'}" data-a="psub" data-v="${u.id}">${esc(u.name)}</button>`).join('')};
 const z2=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+z2(d.getMonth()+1)+'-'+z2(d.getDate());
 const md=d=>{const t=new Date(d+'T00:00:00');return (t.getMonth()+1)+'/'+t.getDate()};
@@ -493,12 +541,17 @@ function pie(items){
   const legend=items.map((it,i)=>`<div class="row" style="margin:3px 0"><span><i class="dot" style="background:${PIE[i%PIE.length]}"></i>${esc(it.n)}</span><span class="amt">${money(it.v,BASE)} <small class="sub">${Math.round(it.v/tot*100)}%</small></span></div>`).join('');
   return `<svg viewBox="0 0 160 160" style="width:min(60vw,220px);display:block;margin:6px auto 10px" aria-hidden="true">${paths}</svg>${legend}<div class="row" style="margin-top:6px"><b>合計</b><b class="amt">${money(tot,BASE)}</b></div>`;
 }
+const statName=(k,by)=>{
+  if(by=='who')return nm(k);
+  if(by=='sub'){const [c,u]=k.split('|');if(c=='none')return '未分類';return catName(c)+(u&&u!='-'?' › '+(subName(c,u)||'其他'):'')}
+  return k=='none'?'未分類':catName(k);
+};
 function statsView(){
-  const sc=(S.stSc=='me'&&S.me)?'me':'all',by=sc=='me'?'cat':(S.stBy||'cat'),rows={};let skip=0;
+  const sc=(S.stSc=='me'&&S.me)?'me':'all',by=(sc=='me'&&S.stBy=='who')?'cat':(S.stBy||'cat'),rows={};let skip=0;
   S.exps.forEach(e=>{
-    const f=rate(e.cur),k=e.cat||'none';
+    const f=rate(e.cur),k=by=='sub'?(cid(e.cat)||'none')+'|'+(e.sub||'-'):(cid(e.cat)||'none');
     if(sc=='all'){
-      if(by=='cat')rows[k]=(rows[k]||0)+e.amount*f;
+      if(by!='who')rows[k]=(rows[k]||0)+e.amount*f;
       else{
         if(e.status!='done'){skip++;return}
         if(e.split.t=='personal'){const w=Object.keys(e.payers)[0];rows[w]=(rows[w]||0)+e.amount*f}
@@ -510,16 +563,16 @@ function statsView(){
       else{const v=owed(e)[S.me];if(v)rows[k]=(rows[k]||0)+v*f}
     }
   });
-  const items=Object.entries(rows).filter(([k,v])=>v>0.005).map(([k,v])=>({n:by=='who'?nm(k):(k=='none'?'未分類':catName(k)),v})).sort((a,b)=>b.v-a.v);
+  const items=Object.entries(rows).filter(([k,v])=>v>0.005).map(([k,v])=>({n:statName(k,by),v})).sort((a,b)=>b.v-a.v);
   const ch=(a,v,cur,t)=>`<button class="${cur==v?'':'g'}" style="padding:6px 14px" data-a="${a}" data-v="${v}">${t}</button>`;
-  return `<div class="card"><b>統計</b><div class="chips" style="margin:8px 0 4px">${ch('stsc','all',sc,'全部')}${ch('stsc','me',sc,'我的')}</div>${sc=='all'?`<div class="chips" style="margin:0 0 4px">${ch('stby','cat',by,'依分類')}${ch('stby','who',by,'依旅伴')}</div>`:''}${pie(items)}${skip?`<div class="sub" style="margin-top:6px">待補充的 ${skip} 筆還不知道怎麼分，沒有算進這張圖。</div>`:''}</div>`;
+  return `<div class="card"><b>統計</b><div class="chips" style="margin:8px 0 4px">${ch('stsc','all',sc,'全部')}${ch('stsc','me',sc,'我的')}</div><div class="chips" style="margin:0 0 4px">${ch('stby','cat',by,'依分類')}${ch('stby','sub',by,'依小分類')}${sc=='all'?ch('stby','who',by,'依旅伴'):''}</div>${pie(items)}${skip?`<div class="sub" style="margin-top:6px">待補充的 ${skip} 筆還不知道怎麼分，沒有算進這張圖。</div>`:''}</div>`;
 }
-/* categories manager */
-const catRows=()=>S.ct.map((c,i)=>`<div class="row" style="gap:6px"><input class="cn" data-i="${i}" value="${esc(c.name)}"><button class="d" style="flex:none;padding:8px 14px" data-a="cdel" data-v="${i}">刪除</button></div>`).join('');
-const catSync=()=>document.querySelectorAll('.cn').forEach(i=>{S.ct[+i.dataset.i].name=i.value.trim()});
+/* categories manager (opens on top of whatever is open) */
+const catRows=()=>S.ct.map((c,i)=>`<div class="card" style="padding:10px 12px"><div class="row" style="gap:6px;margin:0 0 6px"><input class="cn" data-c="${i}" value="${esc(c.name)}" aria-label="大分類"><button class="d" style="flex:none;padding:8px 14px" data-a="cdel" data-v="${i}">刪除</button></div>${(c.subs||[]).map((u,k)=>`<div class="row" style="gap:6px;margin:4px 0 4px 16px"><input class="cn" data-c="${i}" data-s="${k}" value="${esc(u.name)}" aria-label="小分類"><button class="d" style="flex:none;padding:6px 12px" data-a="csdel" data-v="${i}|${k}">刪除</button></div>`).join('')}<div class="row" style="gap:6px;margin:6px 0 0 16px"><input class="cs" data-c="${i}" placeholder="新增小分類"><button class="g" style="flex:none;padding:8px 14px" data-a="csadd" data-v="${i}">新增</button></div></div>`).join('');
+const catSync=()=>document.querySelectorAll('#sheet2 .cn').forEach(el=>{const c=S.ct[+el.dataset.c];if(!c)return;if(el.dataset.s!==undefined){if(c.subs&&c.subs[+el.dataset.s])c.subs[+el.dataset.s].name=el.value.trim()}else c.name=el.value.trim()});
 function openCats(){
   S.ct=JSON.parse(JSON.stringify(cats()));
-  sheet(`<h3>管理分類</h3><div class="sub" style="margin-bottom:6px">刪掉分類後，原本記在裡面的帳會變成「未分類」，不會消失。</div><div id="ctl">${catRows()}</div><div class="row" style="gap:6px"><input id="cnew" placeholder="新增分類，例如：玩"><button data-a="cadd" style="flex:none;padding:10px 16px">新增</button></div><div class="btns"><button class="g" data-a="close">取消</button><button data-a="csave">儲存</button></div>`);
+  sheet2(`<h3>管理分類</h3><div class="sub" style="margin-bottom:8px">大分類底下可以再放小分類。刪掉後，原本記在裡面的帳不會消失，只是變成「未分類」或沒有小分類。</div><div id="ctl">${catRows()}</div><div class="row" style="gap:6px"><input id="cnew" placeholder="新增大分類，例如：寵物"><button data-a="cadd" style="flex:none;padding:10px 16px">新增</button></div><div class="btns"><button class="g" data-a="close2">取消</button><button data-a="csave">儲存</button></div>`);
 }
 
 /* ---------- sheets ---------- */
@@ -536,13 +589,13 @@ function newTripSheet(){
   <div class="btns"><button class="g" data-a="close">取消</button><button data-a="createTrip">建立</button></div>`);
 }
 function openForm(id){
-  const e=S.exps.find(x=>x.id==id)||{};S.ef=e;S.fcat=e.cat||null;
+  const e=S.exps.find(x=>x.id==id)||{};S.ef=e;S.fcat=e.cat?cid(e.cat):null;S.fsub=e.sub||null;
   const ms=M(),multi=e.payers&&Object.keys(e.payers).length>1,pid=(e.payers&&Object.keys(e.payers)[0])||S.me,t=e.split?.t||(!e.id&&S.flt=='per'?'personal':'');
   const op=(v,n)=>`<option value="${v}" ${t==v?'selected':''}>${n}</option>`;
   sheet(`<h3>${e.id?'編輯帳目':'記一筆'}</h3>
   <div class="row" style="gap:6px"><select id="fc" style="width:44%">${curOpts(e.cur||ls('tl_cur_'+S.tid)||S.trip.cur)}</select><input id="fa" type="number" inputmode="decimal" placeholder="金額" value="${e.amount||''}"></div>
   <input id="fn" placeholder="備註（選填）" value="${esc(e.note||'')}">
-  <label>分類</label><div class="chips" id="fcat" style="padding-bottom:4px">${catChips()}</div>
+  <div class="row" style="margin:10px 0 0"><label style="margin:0">分類</label><button class="g" style="padding:3px 14px;font-size:15px" data-a="cats">✎ 新增／編輯</button></div><div class="chips" id="fcat" style="padding-bottom:4px">${catChips()}</div><div class="chips" id="fsub" style="padding-bottom:4px">${subChips()}</div>
   <label>誰付的</label><select id="fp">${ms.map(m=>`<option value="${m.id}" ${m.id==pid?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
   <label style="display:flex;align-items:center"><input type="checkbox" id="fm" ${multi?'checked':''}>多人付款</label>
   <div id="pm" ${multi?'':'hidden'}>${ms.map(m=>`<div class="row"><span>${esc(m.name)}</span><input type="number" inputmode="decimal" id="p_${m.id}" value="${e.payers?.[m.id]||''}"></div>`).join('')}</div>
@@ -591,7 +644,7 @@ async function saveExp(){
     }
     split={t,w};
   }
-  const cur=$('#fc').value;ls('tl_cur_'+S.tid,cur);const data={cur,amount:amt,note:$('#fn').value.trim(),cat:S.fcat||null,payers,split,status:split?'done':'pending'};
+  const cur=$('#fc').value;ls('tl_cur_'+S.tid,cur);const data={cur,amount:amt,note:$('#fn').value.trim(),cat:S.fcat||null,sub:S.fsub||null,payers,split,status:split?'done':'pending'};
   try{
     if(S.ef.id)await updateDoc(doc(db,'trips',S.tid,'expenses',S.ef.id),data);
     else await addDoc(collection(db,'trips',S.tid,'expenses'),{...data,by:S.me||null,ts:serverTimestamp()});
@@ -692,14 +745,28 @@ const act={
   },
   restoreTrip:async()=>{try{await updateDoc(doc(db,'trips',S.tid),{deleted:false});toast('已復原')}catch(e){toast('復原失敗：'+(e.code||e.message))}},
   cats:openCats,
-  cadd:()=>{catSync();const n=$('#cnew').value.trim();if(!n)return toast('請輸入分類名稱');S.ct.push({id:'c'+Date.now().toString(36),name:n});$('#ctl').innerHTML=catRows();$('#cnew').value=''},
+  close2:closeSheet2,
+  cadd:()=>{catSync();const n=$('#cnew').value.trim();if(!n)return toast('請輸入分類名稱');S.ct.push({id:'c'+Date.now().toString(36),name:n,subs:[]});$('#ctl').innerHTML=catRows();$('#cnew').value=''},
   cdel:i=>{catSync();S.ct.splice(+i,1);$('#ctl').innerHTML=catRows()},
-  csave:async()=>{
-    catSync();const list=S.ct.filter(c=>c.name);
-    if(!list.length)return toast('至少要留一個分類');
-    try{await updateDoc(doc(db,'trips',S.tid),{cats:list});toast('已儲存分類');closeSheet()}catch(e){toast('儲存失敗：'+(e.code||e.message))}
+  csadd:i=>{
+    catSync();const el=document.querySelector(`#sheet2 .cs[data-c="${i}"]`),n=(el&&el.value||'').trim();
+    if(!n)return toast('請輸入小分類名稱');
+    const c=S.ct[+i];c.subs=c.subs||[];c.subs.push({id:'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,4),name:n});$('#ctl').innerHTML=catRows();
   },
-  pcat:v=>{S.fcat=S.fcat==v?null:v;$('#fcat').innerHTML=catChips()},
+  csdel:v=>{catSync();const [i,k]=v.split('|');S.ct[+i].subs.splice(+k,1);$('#ctl').innerHTML=catRows()},
+  csave:async()=>{
+    catSync();const list=S.ct.filter(c=>c.name).map(c=>({...c,subs:(c.subs||[]).filter(u=>u.name)}));
+    if(!list.length)return toast('至少要留一個分類');
+    try{
+      await updateDoc(doc(db,'trips',S.tid),{cats:list});S.trip.cats=list;
+      if(S.fcat&&!list.some(c=>c.id==cid(S.fcat)))S.fcat=null;
+      if(S.fsub&&!subName(S.fcat,S.fsub))S.fsub=null;
+      if($('#fcat')){$('#fcat').innerHTML=catChips();$('#fsub').innerHTML=subChips()}
+      toast('已儲存分類');closeSheet2();
+    }catch(e){toast('儲存失敗：'+(e.code||e.message))}
+  },
+  pcat:v=>{S.fcat=cid(S.fcat)==v?null:v;S.fsub=null;$('#fcat').innerHTML=catChips();$('#fsub').innerHTML=subChips()},
+  psub:v=>{S.fsub=S.fsub==v?null:v;$('#fsub').innerHTML=subChips()},
   stsc:v=>{S.stSc=v;render()},
   stby:v=>{S.stBy=v;render()},
   lnew:async sc=>{
@@ -782,6 +849,7 @@ const act={
 };
 document.addEventListener('click',ev=>{
   if(ev.target.id=='sheet'){closeSheet();return}
+  if(ev.target.id=='sheet2'){closeSheet2();return}
   const t=ev.target.closest('[data-a]');
   if(t)act[t.dataset.a]?.(t.dataset.v,t);
 });
