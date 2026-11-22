@@ -98,6 +98,13 @@ a.lk{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99
 .nm{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99px;border:2px solid var(--bd);background:var(--card);font-weight:700}
 .tcard{cursor:pointer}
 .mem[data-a]{cursor:pointer;padding:4px 0 4px 8px}
+.phs{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0}
+.th{position:relative;width:78px;height:78px;border-radius:14px;overflow:hidden;border:2px solid var(--bd);background:var(--card)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th .x{position:absolute;right:2px;top:2px;width:24px;height:24px;padding:0;border-radius:50%;font-size:12px;line-height:1;background:var(--tbg);color:var(--tfg);box-shadow:none}
+.th.pend{border-style:dashed}
+button.th.add{display:flex;align-items:center;justify-content:center;padding:0;background:var(--card);color:var(--tx);box-shadow:none;font-weight:700;font-size:15px}
+#lightimg{width:100%;border-radius:16px;display:block}
 </style>
 </head>
 <body>
@@ -107,10 +114,11 @@ a.lk{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99
 <div id="sheet"><div id="sbody"></div></div>
 <div id="sheet2"><div id="sbody2"></div></div>
 <div id="toast"></div>
+<input type="file" id="phf" accept="image/*" multiple hidden>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import {getFirestore,doc,getDoc,setDoc,addDoc,updateDoc,deleteDoc,collection,onSnapshot,query,orderBy,serverTimestamp,arrayUnion} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {getFirestore,doc,getDoc,setDoc,addDoc,updateDoc,deleteDoc,collection,onSnapshot,query,orderBy,serverTimestamp,arrayUnion,getDocs,where,increment} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const app=initializeApp({
   apiKey:"AIzaSyDuy_r37AhVRdNtbwjtIIROgaukOgpW5-Y",
@@ -329,7 +337,7 @@ function tripView(){
     ${list.length?list.map(e=>{
       const d=e.ts?.toDate?.();
       return `<button class="card trip" data-a="edit" data-v="${e.id}"><div class="row"><b>${esc(e.note||'未命名')}</b><span class="amt">${money(e.amount,e.cur||S.trip.cur)}${(e.cur||S.trip.cur)!=base?`<small class="sub"> ≈${money(e.amount*rate(e.cur),base)}</small>`:''}</span></div>
-      <div class="row sub"><span>${e.cat?esc(catLabel(e))+' · ':''}${esc(Object.keys(e.payers).map(nm).join('、'))} 付${d?' · '+d.toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'}):''}</span>${lab(e)}</div></button>`}).join(''):`<div class="card sub">沒有符合的帳目。按右下角「＋」快速記一筆。</div>`}
+      <div class="row sub"><span>${e.cat?esc(catLabel(e))+' · ':''}${esc(Object.keys(e.payers).map(nm).join('、'))} 付${d?' · '+d.toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'}):''}${e.pc>0?' · 照片 '+e.pc:''}</span>${lab(e)}</div></button>`}).join(''):`<div class="card sub">沒有符合的帳目。按右下角「＋」快速記一筆。</div>`}
     <button class="fab" data-a="add">${f=='per'?'＋ 記個人花費':'＋ 記一筆'}</button>`;
   }else{
     const c=calc();
@@ -437,7 +445,7 @@ function planView(){
   const mini=hasPins?`<div class="card" style="padding:6px"><div class="row" style="margin:0 4px 4px"><span class="sub">當天路線</span><span><button class="g" style="padding:3px 12px;font-size:14px" data-a="mapfull">放大</button> <button class="g" style="padding:3px 12px;font-size:14px" data-a="maptog">${S.mapOpen===false?'展開':'收合'}</button></span></div>${S.mapOpen===false?'':'<div id="map"></div>'}</div>`:'';
   const card=(p,n)=>{
     const mine=!!p.visited?.[S.me];
-    return `<div class="card" style="padding:10px 12px"><div class="row" style="margin:0;gap:6px"><label class="chk"><input type="checkbox" data-a="visit" data-v="${p.id}" ${mine?'checked':''} aria-label="我去過了"></label><span class="num" style="background:${col}">${n}</span><button class="stp" data-a="infoStop" data-v="${p.id}"><b>${esc(p.name)}</b><div class="sub">${(p.lat!=null||p.gurl)?`<span class="badge p">${p.lat!=null?'地圖':'連結'}</span> `:''}${p.time?esc(p.time)+' · ':''}${esc(p.note||'')}</div></button></div></div>`};
+    return `<div class="card" style="padding:10px 12px"><div class="row" style="margin:0;gap:6px"><label class="chk"><input type="checkbox" data-a="visit" data-v="${p.id}" ${mine?'checked':''} aria-label="我去過了"></label><span class="num" style="background:${col}">${n}</span><button class="stp" data-a="infoStop" data-v="${p.id}"><b>${esc(p.name)}</b><div class="sub">${(p.lat!=null||p.gurl)?`<span class="badge p">${p.lat!=null?'地圖':'連結'}</span> `:''}${p.pc>0?`<span class="badge p">照片 ${p.pc}</span> `:''}${p.time?esc(p.time)+' · ':''}${esc(p.note||'')}</div></button></div></div>`};
   const conn=p=>`<div class="conn"><span class="sub">↓ ${p.mode?tline(p):'交通方式未設定'}</span><button class="g" style="padding:2px 12px;font-size:14px" data-a="route" data-v="${p.id}">路線</button></div>`;
   const bcard=(txt,tag,bg,b,sub)=>`<div class="card" style="padding:10px 12px"><div class="row" style="margin:0;gap:8px"><span class="num" style="background:${bg}">${tag}</span><button class="stp" data-a="editBk" data-v="${b.id}">${txt}<div class="sub">${sub}</div></button></div></div>`;
   let n=0,prevStop=false;
@@ -537,15 +545,99 @@ function openStop(id){
   <label>從上一站怎麼去</label><div class="row" style="gap:6px"><select id="smd" style="width:42%"><option value="">未設定</option>${MODES.map(m=>`<option ${p.mode==m?'selected':''}>${m}</option>`).join('')}</select><input id="smn" type="number" inputmode="numeric" placeholder="約幾分鐘" value="${p.mins||''}"></div>
   <input id="stn" placeholder="路線備註，例如：搭 3 號線" value="${esc(p.tnote||'')}">
   <label>連結（一行一個，可寫「名稱 網址」）</label><textarea id="sl" rows="3" placeholder="例如：門票 https://...">${esc((p.links||[]).map(l=>l.t+' '+l.u).join('\n'))}</textarea>
+  <label>照片（門票、憑證、截圖）</label><div id="pbox"></div>
   <div class="btns">${p.id?`<button class="d" data-a="delStop">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="saveStop">儲存</button></div>`);
+  phLoad(p.id?['trips',S.tid,'stops',p.id]:null);
 }
 function openInfo(id){
   const p=S.stops.find(x=>x.id==id);if(!p)return;
   const lk=(p.links||[]).map(l=>`<a class="lk" href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t)}</a>`).join('');
-  sheet(`<h3>${esc(p.name)}</h3><div class="sub">${p.date?esc(dayLabel(p.date)):'未排日期'}${p.time?' · '+esc(p.time):''}</div>${p.addr?`<div class="sub">${esc(p.addr)}</div>`:''}${p.note?`<p>${esc(p.note)}</p>`:''}${p.mode?`<div class="sub">從上一站：${tline(p)}</div>`:''}${lk?`<label>連結</label><div>${lk}</div>`:''}
+  sheet(`<h3>${esc(p.name)}</h3><div class="sub">${p.date?esc(dayLabel(p.date)):'未排日期'}${p.time?' · '+esc(p.time):''}</div>${p.addr?`<div class="sub">${esc(p.addr)}</div>`:''}${p.note?`<p>${esc(p.note)}</p>`:''}${p.mode?`<div class="sub">從上一站：${tline(p)}</div>`:''}${lk?`<label>連結</label><div>${lk}</div>`:''}<div id="pview"></div>
   <div class="btns"><button data-a="gmap" data-v="${id}">在 Google 地圖開啟</button></div>
   <div class="btns"><button class="g" data-a="route" data-v="${id}">路線（從上一站）</button><button class="g" data-a="editStop" data-v="${id}">編輯</button></div>`);
+  if(p.pc>0)phShow(['trips',S.tid,'stops',id],null,'pview');
 }
+/* photos: squeezed hard and stored in Firestore (the free quota is small) */
+const PHMAX=5,PHCAP=100*1024*1024,PHTARGET=190000;
+S.pcache={};
+function loadImg(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('讀不了這個檔案'))};im.src=u})}
+async function compress(file){
+  if(!/^image\//.test(file.type))throw new Error('只能放圖片');
+  let src;
+  try{src=await createImageBitmap(file,{imageOrientation:'from-image'})}catch(e){src=await loadImg(file)}
+  const w=src.width||src.naturalWidth,h=src.height||src.naturalHeight;
+  let dim=1280,q=0.7,out='',cw=w,ch=h;
+  const cv=document.createElement('canvas'),cx=cv.getContext('2d');
+  for(let i=0;i<12;i++){
+    const sc=Math.min(1,dim/Math.max(w,h));cw=Math.max(1,Math.round(w*sc));ch=Math.max(1,Math.round(h*sc));
+    cv.width=cw;cv.height=ch;cx.fillStyle='#fff';cx.fillRect(0,0,cw,ch);cx.drawImage(src,0,0,cw,ch);
+    out=cv.toDataURL('image/jpeg',q);
+    if(out.length<=PHTARGET)break;
+    if(q>0.46)q=Math.round((q-0.08)*100)/100;else dim=Math.round(dim*0.8);
+  }
+  if(out.length>290000)throw new Error('太大了，壓不下來');
+  return {data:out,w:cw,h:ch,n:out.length};
+}
+const mb=x=>(x/1048576).toFixed(1);
+function renderPh(){
+  const box=$('#pbox');if(!box||!S.ph)return;
+  const n=S.ph.ex.length+S.ph.pend.length;
+  box.innerHTML=`<div class="phs">${S.ph.ex.map(f=>`<div class="th"><img alt="照片" src="${f.data}" data-a="phview" data-v="${f.id}"><button class="x" data-a="phdel" data-v="${f.id}" aria-label="刪除照片">✕</button></div>`).join('')}${S.ph.pend.map((f,i)=>`<div class="th pend"><img alt="新照片" src="${f.data}"><button class="x" data-a="phrm" data-v="${i}" aria-label="移除">✕</button></div>`).join('')}${n<PHMAX?`<button class="th add" data-a="phadd">＋ 照片</button>`:''}</div><div class="sub">${n}/${PHMAX} 張，儲存時會自動壓縮到很小</div>`;
+}
+async function phLoad(ref,item,meta){
+  const me={ref,item:item||null,meta:meta||null,ex:[],pend:[]};S.ph=me;renderPh();
+  if(!ref||(meta&&!item))return;
+  try{
+    const c=collection(db,...ref,'files');
+    const snap=await getDocs(item?query(c,where('item','==',item)):c);
+    if(S.ph!==me)return;
+    me.ex=snap.docs.map(d=>({id:d.id,...d.data()}));me.ex.forEach(f=>S.pcache[f.id]=f.data);
+  }catch(e){}
+  renderPh();
+}
+async function phShow(ref,item,elId){
+  try{
+    const c=collection(db,...ref,'files'),snap=await getDocs(item?query(c,where('item','==',item)):c);
+    const list=snap.docs.map(d=>({id:d.id,...d.data()}));list.forEach(f=>S.pcache[f.id]=f.data);
+    const el=$('#'+elId);if(el&&list.length)el.innerHTML=`<label>照片</label><div class="phs">${list.map(f=>`<div class="th"><img alt="照片" src="${f.data}" data-a="phview" data-v="${f.id}"></div>`).join('')}</div>`;
+  }catch(e){}
+}
+async function phCount(ref,dBytes,dCount,item){
+  try{await updateDoc(doc(db,'trips',S.tid),{photoBytes:increment(dBytes)})}catch(e){}
+  if(!item){try{await updateDoc(doc(db,...ref),{pc:increment(dCount)})}catch(e){}}
+}
+async function phSave(ref,item,extra){
+  const pend=S.ph?S.ph.pend:[];if(!pend.length)return 0;
+  let b=0,ok=0;
+  for(const f of pend){
+    try{await addDoc(collection(db,...ref,'files'),{data:f.data,w:f.w,h:f.h,n:f.n,by:S.me||null,...(item?{item}:{}),...(extra||{}),ts:serverTimestamp()});b+=f.n;ok++}
+    catch(e){toast('照片上傳失敗：'+(e.code||e.message));break}
+  }
+  S.ph.pend=[];
+  if(ok)await phCount(ref,b,ok,item);
+  return ok;
+}
+async function phPurge(ref,field,val){
+  try{
+    const c=collection(db,...ref,'files'),snap=await getDocs(field?query(c,where(field,'==',val)):c);
+    let b=0;
+    for(const d of snap.docs){b+=d.data().n||0;await deleteDoc(doc(db,...ref,'files',d.id))}
+    if(b)await updateDoc(doc(db,'trips',S.tid),{photoBytes:increment(-b)});
+  }catch(e){}
+}
+$('#phf').addEventListener('change',async ev=>{
+  const files=[...ev.target.files];ev.target.value='';
+  if(!S.ph)return;
+  for(const f of files){
+    if(S.ph.ex.length+S.ph.pend.length>=PHMAX){toast('最多 '+PHMAX+' 張');break}
+    try{
+      const r=await compress(f);
+      const used=(S.trip.photoBytes||0)+S.ph.pend.reduce((a,x)=>a+x.n,0)+r.n;
+      if(used>PHCAP){toast('這趟旅程的照片快到上限（100MB）了，請先刪掉一些舊的');break}
+      S.ph.pend.push(r);renderPh();
+    }catch(e){toast('這張放不進去：'+(e.message||e))}
+  }
+});
 /* flights & hotels */
 const fmtT=(d,t)=>d?md(d)+(t?' '+t:''):'';
 const nights=(a,b)=>a&&b?Math.max(0,Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5)):0;
@@ -553,8 +645,8 @@ const lksHtml=b=>(b.links||[]).map(l=>`<a class="lk" href="${esc(l.u)}" target="
 function bkView(){
   const key=b=>(b.d1||'9999')+(b.t1||'99:99');
   const fl=flightsAll().sort((a,b)=>key(a).localeCompare(key(b))),ho=hotelsAll().sort((a,b)=>key(a).localeCompare(key(b)));
-  const fcard=b=>`<div class="card"><button class="stp" style="width:100%" data-a="editBk" data-v="${b.id}"><div class="row" style="margin:0"><b>${esc(b.dir||'機票')}${b.no?' · '+esc(b.no):''}</b><span class="sub">${b.pnr?'代號 '+esc(b.pnr):''}</span></div><div>${esc(b.from||'?')} → ${esc(b.to||'?')}</div><div class="sub">搭乘：${esc(whoText(b))}</div><div class="sub">${esc(fmtT(b.d1,b.t1))} → ${esc(b.d2&&b.d2!=b.d1?fmtT(b.d2,b.t2):(b.t2||''))}</div>${b.note?`<div class="sub">${esc(b.note)}</div>`:''}</button>${lksHtml(b)?`<div style="margin-top:6px">${lksHtml(b)}</div>`:''}</div>`;
-  const hcard=b=>`<div class="card"><button class="stp" style="width:100%" data-a="editBk" data-v="${b.id}"><div class="row" style="margin:0"><b>${esc(b.name)}</b><span class="sub">${b.pnr?'編號 '+esc(b.pnr):''}</span></div><div class="sub">${esc(fmtT(b.d1,b.t1))} 入住 → ${esc(fmtT(b.d2,b.t2))} 退房${nights(b.d1,b.d2)?' · '+nights(b.d1,b.d2)+' 晚':''}</div><div class="sub">入住旅伴：${esc(whoText(b))}</div>${b.addr?`<div class="sub">${esc(b.addr)}</div>`:''}${b.note?`<div class="sub">${esc(b.note)}</div>`:''}</button><div style="margin-top:6px"><button class="g" style="padding:4px 14px;font-size:15px;margin:4px 6px 4px 0" data-a="bmap" data-v="${b.id}">在 Google 地圖開啟</button>${lksHtml(b)}</div></div>`;
+  const fcard=b=>`<div class="card"><button class="stp" style="width:100%" data-a="editBk" data-v="${b.id}"><div class="row" style="margin:0"><b>${esc(b.dir||'機票')}${b.no?' · '+esc(b.no):''}</b><span class="sub">${b.pnr?'代號 '+esc(b.pnr):''}${b.pc>0?' 照片 '+b.pc:''}</span></div><div>${esc(b.from||'?')} → ${esc(b.to||'?')}</div><div class="sub">搭乘：${esc(whoText(b))}</div><div class="sub">${esc(fmtT(b.d1,b.t1))} → ${esc(b.d2&&b.d2!=b.d1?fmtT(b.d2,b.t2):(b.t2||''))}</div>${b.note?`<div class="sub">${esc(b.note)}</div>`:''}</button>${lksHtml(b)?`<div style="margin-top:6px">${lksHtml(b)}</div>`:''}</div>`;
+  const hcard=b=>`<div class="card"><button class="stp" style="width:100%" data-a="editBk" data-v="${b.id}"><div class="row" style="margin:0"><b>${esc(b.name)}</b><span class="sub">${b.pnr?'編號 '+esc(b.pnr):''}${b.pc>0?' 照片 '+b.pc:''}</span></div><div class="sub">${esc(fmtT(b.d1,b.t1))} 入住 → ${esc(fmtT(b.d2,b.t2))} 退房${nights(b.d1,b.d2)?' · '+nights(b.d1,b.d2)+' 晚':''}</div><div class="sub">入住旅伴：${esc(whoText(b))}</div>${b.addr?`<div class="sub">${esc(b.addr)}</div>`:''}${b.note?`<div class="sub">${esc(b.note)}</div>`:''}</button><div style="margin-top:6px"><button class="g" style="padding:4px 14px;font-size:15px;margin:4px 6px 4px 0" data-a="bmap" data-v="${b.id}">在 Google 地圖開啟</button>${lksHtml(b)}</div></div>`;
   return `<div class="sub" style="margin:0 4px 8px"><b>機票</b>　設好時間後會自動排進行程</div>${fl.length?fl.map(fcard).join(''):`<div class="card sub">還沒有機票。按右下角「＋」新增。</div>`}<div class="sub" style="margin:14px 4px 8px"><b>飯店</b>　每天的路線可以從飯店出發、回到飯店</div>${ho.length?ho.map(hcard).join(''):`<div class="card sub">還沒有飯店。按右下角「＋」新增。</div>`}<button class="fab" data-a="newBk">＋ 新增機票／飯店</button>`;
 }
 const whoChips=()=>M().map(m=>`<button class="${S.bw.has(m.id)?'':'g'}" data-a="bwho" data-v="${m.id}">${esc(m.name)}</button>`).join('');
@@ -575,7 +667,9 @@ function openFlight(id){
   <label>訂位代號</label><input id="fpn" value="${esc(b.pnr||'')}">
   <label>備註</label><input id="fnt" value="${esc(b.note||'')}" placeholder="例如：託運行李 20kg">
   <label>連結（訂票、電子機票，一行一個）</label><textarea id="fln" rows="2" placeholder="例如：電子機票 https://...">${esc((b.links||[]).map(l=>l.t+' '+l.u).join('\n'))}</textarea>
+  <label>憑證／截圖</label><div id="pbox"></div>
   <div class="btns">${b.id?`<button class="d" data-a="delBk">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="saveFlight">儲存</button></div>`);
+  phLoad(b.id?['trips',S.tid,'bookings',b.id]:null);
 }
 function openHotel(id){
   const b=S.bk.find(x=>x.id==id)||{};S.bi=b.id||null;S.apt=null;
@@ -592,7 +686,9 @@ function openHotel(id){
   <label>訂房編號</label><input id="hpn" value="${esc(b.pnr||'')}">
   <label>備註</label><input id="hnt" value="${esc(b.note||'')}" placeholder="例如：含早餐">
   <label>連結（訂房確認信、官網，一行一個）</label><textarea id="hln" rows="2">${esc((b.links||[]).map(l=>l.t+' '+l.u).join('\n'))}</textarea>
+  <label>憑證／截圖</label><div id="pbox"></div>
   <div class="btns">${b.id?`<button class="d" data-a="delBk">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="saveHotel">儲存</button></div>`);
+  phLoad(b.id?['trips',S.tid,'bookings',b.id]:null);
 }
 /* location picking (stops, hotels, airports share this) */
 function applyLoc(c,msg){
@@ -616,8 +712,10 @@ async function autoDates(extra){
 }
 async function saveBk(data){
   try{
-    if(S.bi)await updateDoc(doc(db,'trips',S.tid,'bookings',S.bi),data);
-    else await addDoc(collection(db,'trips',S.tid,'bookings'),{...data,ts:serverTimestamp()});
+    let bid=S.bi;
+    if(bid)await updateDoc(doc(db,'trips',S.tid,'bookings',bid),data);
+    else bid=(await addDoc(collection(db,'trips',S.tid,'bookings'),{...data,ts:serverTimestamp()})).id;
+    await phSave(['trips',S.tid,'bookings',bid]);
     await autoDates([data.d1,data.d2]);
     S.day=data.d1||S.day;closeSheet();
   }catch(e){toast('儲存失敗：'+(e.code||e.message))}
@@ -657,7 +755,7 @@ function listView(){
     const urls=(it.n||'').match(/https?:\/\/\S+/g)||[],note=(it.n||'').replace(/https?:\/\/\S+/g,'').trim();
     const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return '連結'}};
     const chips=urls.length?`<div style="margin:0 0 4px 36px">${urls.map(u=>`<a class="lk" style="padding:4px 12px;font-size:15px" href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))}</a>`).join('')}</div>`:'';
-    const sub=[note,(sc=='s'&&it.d&&it.by)?nm(it.by)+' 完成':''].filter(Boolean).join(' · ');
+    const sub=[note,it.pc>0?'照片 '+it.pc:'',(sc=='s'&&it.d&&it.by)?nm(it.by)+' 完成':''].filter(Boolean).join(' · ');
     return `<div class="row" style="margin:4px 0;align-items:flex-start;gap:6px"><label class="chk" style="padding-top:4px"><input type="checkbox" data-a="ltog" data-v="${sc}|${lid}|${it.id}" ${it.d?'checked':''} aria-label="完成"></label><button class="stp${it.d?' ldone':''}" data-a="litem" data-v="${sc}|${lid}|${it.id}"><span>${esc(it.t)}</span>${sub?`<div class="sub">${esc(sub)}</div>`:''}</button></div>${chips}`;
   };
   const card=(l,sc)=>`<div class="card"><div class="row" style="margin:0 0 4px"><b>${esc(l.name)}</b><span><button class="g" style="padding:3px 12px;font-size:14px" data-a="lren" data-v="${sc}|${l.id}">改名</button> <button class="g" style="padding:3px 12px;font-size:14px" data-a="ldel" data-v="${sc}|${l.id}">刪除</button></span></div>${l.items.map(it=>row(it,sc,l.id)).join('')}<button class="g" style="margin-top:8px;width:100%" data-a="litem" data-v="${sc}|${l.id}|">＋ 新增項目</button></div>`;
@@ -667,8 +765,10 @@ function listView(){
 function openItem(sc,lid,iid){
   const l=(sc=='p'?privLists():sharedLists()).find(x=>x.id==lid);if(!l)return;
   const it=l.items.find(x=>x.id==iid)||{};S.li={sc,lid,iid:iid||null};
+  const pRef=sc=='p'?(S.user?['users',S.user.uid,'plists',S.tid]:null):['trips',S.tid,'lists',lid];
   const ex=/買/.test(l.name)?['例如：藥妝店的防曬乳','品牌、數量、在哪裡買，也可以貼商品網址']:/行前|準備/.test(l.name)?['例如：護照影本','例如：有效期限要 6 個月以上']:['例如：項目名稱','備註，也可以貼網址'];
-  sheet(`<h3>${iid?'編輯項目':'新增項目'}</h3><label>項目</label><input id="lt" value="${esc(it.t||'')}" placeholder="${ex[0]}"><label>備註（可以貼網址）</label><textarea id="lnn" rows="3" placeholder="${ex[1]}">${esc(it.n||'')}</textarea><div class="btns">${iid?`<button class="d" data-a="lrm">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="lsave">儲存</button></div>`);
+  sheet(`<h3>${iid?'編輯項目':'新增項目'}</h3><label>項目</label><input id="lt" value="${esc(it.t||'')}" placeholder="${ex[0]}"><label>備註（可以貼網址）</label><textarea id="lnn" rows="3" placeholder="${ex[1]}">${esc(it.n||'')}</textarea>${pRef?'<label>照片／截圖</label><div id="pbox"></div>':'<div class="sub" style="margin-top:8px">私人清單的照片要先登入才能存。</div>'}<div class="btns">${iid?`<button class="d" data-a="lrm">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="lsave">儲存</button></div>`);
+  if(pRef)phLoad(pRef,iid||null,{sc,lid});
   setTimeout(()=>$('#lt')&&$('#lt').focus(),60);
 }
 /* stats */
@@ -743,9 +843,10 @@ function openForm(id){
   <label style="display:flex;align-items:center"><input type="checkbox" id="fm" ${multi?'checked':''}>多人付款</label>
   <div id="pm" ${multi?'':'hidden'}>${ms.map(m=>`<div class="row"><span>${esc(m.name)}</span><input type="number" inputmode="decimal" id="p_${m.id}" value="${e.payers?.[m.id]||''}"></div>`).join('')}</div>
   <label>怎麼分</label><select id="fs">${op('','先不決定（待補充）')}${op('equal','平均')}${op('amount','指定金額')}${op('share','按份數')}${op('personal','個人花費（不分帳）')}</select>
-  <div id="sp"></div>
+  <div id="sp"></div><label>收據照片</label><div id="pbox"></div>
   <div class="btns">${e.id?`<button class="d" data-a="del">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="save">儲存</button></div>`);
   spRows();
+  phLoad(e.id?['trips',S.tid,'expenses',e.id]:null);
   if(!e.id)setTimeout(()=>$('#fa').focus(),50);
 }
 function spRows(){
@@ -789,8 +890,10 @@ async function saveExp(){
   }
   const cur=$('#fc').value;ls('tl_cur_'+S.tid,cur);const data={cur,amount:amt,note:$('#fn').value.trim(),cat:S.fcat||null,sub:S.fsub||null,payers,split,status:split?'done':'pending'};
   try{
-    if(S.ef.id)await updateDoc(doc(db,'trips',S.tid,'expenses',S.ef.id),data);
-    else await addDoc(collection(db,'trips',S.tid,'expenses'),{...data,by:S.me||null,ts:serverTimestamp()});
+    let eid=S.ef.id;
+    if(eid)await updateDoc(doc(db,'trips',S.tid,'expenses',eid),data);
+    else eid=(await addDoc(collection(db,'trips',S.tid,'expenses'),{...data,by:S.me||null,ts:serverTimestamp()})).id;
+    await phSave(['trips',S.tid,'expenses',eid]);
     closeSheet();
   }catch(err){toast('儲存失敗：'+(err.code||err.message))}
 }
@@ -804,7 +907,7 @@ function openSettings(){
   const T={light:['淺色','#f5efe5','#4a3b2d'],dark:['深色','#85745f','#fbf5ea']};
   let h=`<h3>設定</h3><label>主題顏色</label><div class="sw">${Object.entries(T).map(([k,v])=>`<button class="swb" data-a="theme" data-v="${k}" style="--c:${v[1]};color:${v[2]}">${k==th?'✓ ':''}${v[0]}</button>`).join('')}</div><label>底圖</label><div class="sw">${[['scene','地球'],['boy','男孩'],['girl','女孩'],['none','無']].map(([k,n])=>`<button class="swb" data-a="art" data-v="${k}" style="--c:var(--sec)">${(ls('tl_art')||'scene')==k?'✓ ':''}${n}</button>`).join('')}</div>`;
   if(S.tid&&S.trip){
-    h+=`<label>旅程資料</label><input id="tn2" value="${esc(S.trip.name)}" placeholder="旅程名稱"><input id="td2" value="${esc(S.trip.desc||'')}" placeholder="描述（選填）"><div class="row" style="gap:6px"><input id="ds" type="date" value="${esc(S.trip.start||'')}"><input id="de" type="date" value="${esc(S.trip.end||'')}"></div><label>預設記帳幣別</label><select id="tc2">${curOpts(S.trip.cur)}</select><div class="btns"><button data-a="saveTrip">儲存旅程資料</button><button class="g" data-a="cats">管理分類</button></div>`;
+    h+=`<label>旅程資料</label><input id="tn2" value="${esc(S.trip.name)}" placeholder="旅程名稱"><input id="td2" value="${esc(S.trip.desc||'')}" placeholder="描述（選填）"><div class="row" style="gap:6px"><input id="ds" type="date" value="${esc(S.trip.start||'')}"><input id="de" type="date" value="${esc(S.trip.end||'')}"></div><label>預設記帳幣別</label><select id="tc2">${curOpts(S.trip.cur)}</select><div class="btns"><button data-a="saveTrip">儲存旅程資料</button><button class="g" data-a="cats">管理分類</button></div><div class="sub" style="margin-top:8px">照片用量：${mb(S.trip.photoBytes||0)} MB（這趟旅程上限 100 MB，照片都會壓縮到很小）</div>`;
     h+=`<label>匯率（換算成新台幣，預設只是大約值，請自行確認）</label>`+CURS.filter(c=>c!=BASE).map(c=>`<div class="row"><span><b>${c}</b> <small class="sub">${CN[c]||''}</small></span><input type="number" inputmode="decimal" step="any" class="rt" data-c="${c}" value="${rate(c).toFixed(4)}"></div>`).join('')+`<div class="btns"><button data-a="saveRates">儲存匯率</button></div>`;
     h+=`<button class="d" data-a="delTrip" style="width:100%;margin-top:18px">刪除這趟旅程</button>`;
   }
@@ -823,6 +926,19 @@ const act={
   mems:id=>{
     const i=S.info[id],mem=i&&i!=='l'?(i.members||[]):[];
     sheet(`<h3>旅伴（${mem.length} 人）</h3><div>${mem.map(m=>`<span class="nm">${esc(m.name)}</span>`).join('')}</div><div class="btns"><button class="g" data-a="close">關閉</button></div>`);
+  },
+  phadd:()=>$('#phf').click(),
+  phrm:i=>{S.ph.pend.splice(+i,1);renderPh()},
+  phview:id=>{if(S.pcache[id])sheet2(`<img id="lightimg" alt="照片" src="${S.pcache[id]}"><div class="btns"><button class="g" data-a="close2">關閉</button></div>`)},
+  phdel:async id=>{
+    if(!confirm('刪除這張照片？'))return;
+    const f=S.ph.ex.find(x=>x.id==id);if(!f)return;
+    try{
+      await deleteDoc(doc(db,...S.ph.ref,'files',id));
+      S.ph.ex=S.ph.ex.filter(x=>x.id!=id);renderPh();
+      await phCount(S.ph.ref,-(f.n||0),-1,S.ph.item);
+      if(S.ph.meta&&S.ph.item)mutList(S.ph.meta.sc,S.ph.meta.lid,l=>{const it=l.items.find(x=>x.id==S.ph.item);if(it)it.pc=Math.max(0,(it.pc||1)-1)});
+    }catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
   newBk:()=>sheet(`<h3>新增</h3><div class="btns"><button data-a="newFlight">機票</button><button data-a="newHotel">飯店</button></div><div class="btns"><button class="g" data-a="close">取消</button></div>`),
   newFlight:()=>openFlight(),
@@ -848,7 +964,7 @@ const act={
   },
   delBk:async()=>{
     if(!confirm('確定刪除這筆？'))return;
-    try{await deleteDoc(doc(db,'trips',S.tid,'bookings',S.bi));closeSheet()}catch(e){toast('刪除失敗：'+(e.code||e.message))}
+    try{await phPurge(['trips',S.tid,'bookings',S.bi]);await deleteDoc(doc(db,'trips',S.tid,'bookings',S.bi));closeSheet()}catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
   addStop:()=>S.me?openStop():openWho(),
   editStop:id=>openStop(id),
@@ -887,15 +1003,17 @@ const act={
     if(lat==null)for(const l of links){const c=parseCoords(l.u);if(c){lat=c[0];lng=c[1];break}}
     const data={name,date,time:$('#stm').value,note:$('#sm').value.trim(),addr:$('#sa').value.trim(),lat,lng,gurl:S.sf.gurl||null,mode:$('#smd').value,mins:+$('#smn').value||null,tnote:$('#stn').value.trim(),links};
     try{
-      if(S.sf.id)await updateDoc(doc(db,'trips',S.tid,'stops',S.sf.id),data);
-      else await addDoc(collection(db,'trips',S.tid,'stops'),{...data,visited:{},ts:serverTimestamp()});
+      let sid=S.sf.id;
+      if(sid)await updateDoc(doc(db,'trips',S.tid,'stops',sid),data);
+      else sid=(await addDoc(collection(db,'trips',S.tid,'stops'),{...data,visited:{},ts:serverTimestamp()})).id;
+      await phSave(['trips',S.tid,'stops',sid]);
       if(date){ls('tl_date_'+S.tid,date);S.day=date}
       closeSheet();
     }catch(e){toast('儲存失敗：'+(e.code||e.message))}
   },
   delStop:async()=>{
     if(!confirm('確定刪除這個景點？'))return;
-    try{await deleteDoc(doc(db,'trips',S.tid,'stops',S.sf.id));closeSheet()}
+    try{await phPurge(['trips',S.tid,'stops',S.sf.id]);await deleteDoc(doc(db,'trips',S.tid,'stops',S.sf.id));closeSheet()}
     catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
   saveTrip:async()=>{
@@ -950,20 +1068,29 @@ const act={
   lren:v=>{const [sc,lid]=v.split('|');const l=(sc=='p'?privLists():sharedLists()).find(x=>x.id==lid);if(!l)return;const n=(prompt('清單名稱',l.name)||'').trim();if(n)mutList(sc,lid,x=>{x.name=n})},
   ldel:async v=>{
     const [sc,lid]=v.split('|');if(!confirm('確定刪除這份清單？'))return;
-    if(sc=='p')return savePriv(privLists().filter(x=>x.id!=lid));
+    if(sc=='p'){if(S.user)await phPurge(['users',S.user.uid,'plists',S.tid],'list',lid);return savePriv(privLists().filter(x=>x.id!=lid))}
     if(S.slists.length<=1)ls('tl_nodef_'+S.tid,'1');
     if(!S.slists.some(x=>x.id==lid))return render();
-    try{await deleteDoc(doc(db,'trips',S.tid,'lists',lid))}catch(e){toast('刪除失敗：'+(e.code||e.message))}
+    try{await phPurge(['trips',S.tid,'lists',lid]);await deleteDoc(doc(db,'trips',S.tid,'lists',lid))}catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
   ltog:(v,el)=>{const [sc,lid,iid]=v.split('|');mutList(sc,lid,l=>{const it=l.items.find(x=>x.id==iid);if(it){it.d=el.checked;it.by=el.checked?(S.me||null):null}})},
   litem:v=>{const [sc,lid,iid]=v.split('|');openItem(sc,lid,iid)},
-  lsave:()=>{
+  lsave:async()=>{
     const t=$('#lt').value.trim();if(!t)return toast('請輸入項目');
-    const {sc,lid,iid}=S.li,n=$('#lnn').value.trim();
-    mutList(sc,lid,l=>{if(iid){const it=l.items.find(x=>x.id==iid);if(it){it.t=t;it.n=n}}else l.items.push({id:'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),t,n,d:false,by:null})});
+    const {sc,lid,iid}=S.li,n=$('#lnn').value.trim(),nid=iid||('i'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+    let ok=0;
+    if(S.ph&&S.ph.pend.length){
+      const ref=sc=='p'?(S.user?['users',S.user.uid,'plists',S.tid]:null):['trips',S.tid,'lists',lid];
+      if(ref)ok=await phSave(ref,nid,{list:lid});
+    }
+    await mutList(sc,lid,l=>{if(iid){const it=l.items.find(x=>x.id==iid);if(it){it.t=t;it.n=n;if(ok)it.pc=(it.pc||0)+ok}}else l.items.push({id:nid,t,n,d:false,by:null,pc:ok||0})});
     closeSheet();
   },
-  lrm:()=>{const {sc,lid,iid}=S.li;mutList(sc,lid,l=>{l.items=l.items.filter(x=>x.id!=iid)});closeSheet()},
+  lrm:async()=>{
+    const {sc,lid,iid}=S.li,ref=sc=='p'?(S.user?['users',S.user.uid,'plists',S.tid]:null):['trips',S.tid,'lists',lid];
+    if(ref)await phPurge(ref,'item',iid);
+    await mutList(sc,lid,l=>{l.items=l.items.filter(x=>x.id!=iid)});closeSheet();
+  },
   art:v=>{ls('tl_art',v);document.documentElement.dataset.art=v;openSettings()},
   paid:async(k,el)=>{
     try{await updateDoc(doc(db,'trips',S.tid),{['paid.'+k]:el.checked})}
@@ -997,7 +1124,7 @@ const act={
   },
   del:async()=>{
     if(!confirm('確定刪除這筆帳目？'))return;
-    try{await deleteDoc(doc(db,'trips',S.tid,'expenses',S.ef.id));closeSheet()}
+    try{await phPurge(['trips',S.tid,'expenses',S.ef.id]);await deleteDoc(doc(db,'trips',S.tid,'expenses',S.ef.id));closeSheet()}
     catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
   share:async()=>{
