@@ -79,7 +79,8 @@ label.chk{display:flex;align-items:center;gap:8px;margin:0;color:var(--tx);font-
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;border:1.5px solid #fff;vertical-align:middle}
 .pin{position:relative}
 .pin.v::after{content:'✓';position:absolute;right:-7px;top:-9px;width:17px;height:17px;border-radius:50%;background:#2f8f6b;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
-.conn{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-4px 8px 8px 36px}
+.conn{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-2px 8px 10px 30px;padding:4px 6px 4px 14px;background:var(--card);border:2px solid var(--bd);border-radius:99px}
+.conn .sub{color:var(--tx);font-size:15px}
 .num{flex:none;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
 a.lk{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99px;border:2px solid var(--bd);background:var(--card);color:var(--tx);text-decoration:none;font-weight:700;font-size:16px}
 .ldone{text-decoration:line-through;opacity:.6}
@@ -93,6 +94,10 @@ a.lk{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99
 .avs .av:first-child{margin-left:0}
 .av2{background:var(--sub)}
 .ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mem{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.nm{display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:99px;border:2px solid var(--bd);background:var(--card);font-weight:700}
+.tcard{cursor:pointer}
+.mem[data-a]{cursor:pointer;padding:4px 0 4px 8px}
 </style>
 </head>
 <body>
@@ -129,7 +134,7 @@ const num=x=>r2(x).toLocaleString('zh-TW',{maximumFractionDigits:2});
 const money=(x,c)=>sym(c||'TWD')+num(x);
 const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
 
-let S={info:{},plists:null,slists:[],mapOpen:true,user:null,local:JSON.parse(ls('tl_trips')||'[]'),cloud:[],tid:null,trip:null,exps:[],tab:'exp',flt:'all',me:null,ef:{},u1:null,u2:null,u3:null};
+let S={bk:[],info:{},plists:null,slists:[],mapOpen:true,user:null,local:JSON.parse(ls('tl_trips')||'[]'),cloud:[],tid:null,trip:null,exps:[],tab:'exp',flt:'all',me:null,ef:{},u1:null,u2:null,u3:null};
 
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2600)}
 function sheet(h){$('#sbody').innerHTML=h;$('#sheet').classList.add('on')}
@@ -156,8 +161,8 @@ onAuthStateChanged(auth,u=>{
 
 /* ---------- open / leave trip ---------- */
 function openTrip(id,push=true){
-  S.u2&&S.u2();S.u3&&S.u3();S.u4&&S.u4();S.u5&&S.u5();S.u6&&S.u6();
-  Object.assign(S,{tid:id,trip:null,exps:[],stops:[],slists:[],map:null,tab:'plan',flt:'all',me:ls('tl_me_'+id)});
+  S.u2&&S.u2();S.u3&&S.u3();S.u4&&S.u4();S.u5&&S.u5();S.u6&&S.u6();S.u7&&S.u7();
+  Object.assign(S,{tid:id,trip:null,exps:[],stops:[],bk:[],slists:[],map:null,tab:'plan',flt:'all',me:ls('tl_me_'+id)});
   if(push)history.pushState({},'','?t='+id);
   S.u2=onSnapshot(doc(db,'trips',id),d=>{
     if(!d.exists())S.trip=false;
@@ -166,6 +171,7 @@ function openTrip(id,push=true){
   },()=>{S.trip=false;render()});
   S.u5=onSnapshot(collection(db,'trips',id,'lists'),s=>{S.slists=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.ts?.seconds||0)-(b.ts?.seconds||0));render()},()=>{});
   subPriv();
+  S.u7=onSnapshot(query(collection(db,'trips',id,'bookings'),orderBy('ts','asc')),s=>{S.bk=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
   S.u4=onSnapshot(query(collection(db,'trips',id,'stops'),orderBy('ts','asc')),s=>{S.stops=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
   S.u3=onSnapshot(query(collection(db,'trips',id,'expenses'),orderBy('ts','desc')),s=>{
     S.exps=s.docs.map(d=>({id:d.id,...d.data()}));render();
@@ -189,7 +195,7 @@ function fmtRange(a,b){
 }
 function goHome(push=true){
   S.info={};
-  S.u2&&S.u2();S.u3&&S.u3();S.u4&&S.u4();S.u5&&S.u5();S.u6&&S.u6();S.tid=null;S.trip=null;
+  S.u2&&S.u2();S.u3&&S.u3();S.u4&&S.u4();S.u5&&S.u5();S.u6&&S.u6();S.u7&&S.u7();S.tid=null;S.trip=null;
   if(push)history.pushState({},'','./');
   render();
 }
@@ -287,9 +293,9 @@ function tripCards(ts){
   rows.forEach(r=>{
     if(g(r)!==last){last=g(r);h+=`<div class="sub" style="margin:14px 4px 6px"><b>${titles[last]}</b></div>`}
     const {t,i,st}=r,mem=i?(i.members||[]):[];
-    const av=mem.slice(0,5).map((m,k)=>`<span class="av" style="background:${PAL[k%PAL.length]}">${esc([...m.name][0]||'?')}</span>`).join('')+(mem.length>5?`<span class="av av2">+${mem.length-5}</span>`:'');
+    const names=mem.length>3?mem.slice(0,3).map(m=>m.name).join('、')+' 等 '+mem.length+' 人':mem.map(m=>m.name).join('、');
     const n=i&&i.start&&i.end&&i.end>i.start?Math.round((new Date(i.end+'T00:00:00')-new Date(i.start+'T00:00:00'))/864e5)+1:0;
-    h+=`<button class="card trip tcard" data-a="open" data-v="${esc(t.id)}"><div class="row" style="margin:0"><b class="tn">${esc(i&&i.name?i.name:t.name)}</b>${st?`<span class="pill ${st.c}">${st.t}</span>`:''}</div>${i&&i.start?`<div class="sub" style="margin:2px 0 8px">${esc(fmtRange(i.start,i.end))}${n?' · '+n+' 天':''}</div>`:''}${mem.length?`<div class="row" style="margin:0;justify-content:flex-start;gap:10px"><span class="avs">${av}</span><span class="sub ell">${esc(mem.map(m=>m.name).join('、'))}</span></div>`:''}</button>`;
+    h+=`<div class="card trip tcard" role="button" tabindex="0" data-a="open" data-v="${esc(t.id)}"><div class="row" style="margin:0"><b class="tn">${esc(i&&i.name?i.name:t.name)}</b>${st?`<span class="pill ${st.c}">${st.t}</span>`:''}</div>${(i&&i.start)||mem.length?`<div class="row" style="margin:6px 0 0;gap:10px">${i&&i.start?`<span class="sub" style="flex:none">${esc(fmtRange(i.start,i.end))}${n?' · '+n+' 天':''}</span>`:''}${mem.length?`<span class="mem" data-a="mems" data-v="${esc(t.id)}" style="justify-content:${i&&i.start?'flex-end':'flex-start'}"><span class="sub ell">${esc(names)}</span></span>`:''}</div>`:''}</div>`;
   });
   return h;
 }
@@ -313,6 +319,7 @@ function tripView(){
   const base=BASE;
   let body='';
   if(S.tab=='plan')body=planView();
+  else if(S.tab=='bk')body=bkView();
   else if(S.tab=='list')body=listView();
   else if(S.tab=='exp'){
     const f=S.flt;
@@ -333,7 +340,7 @@ function tripView(){
   }
   return hd(S.trip.name)+`<main>
   <div class="row sub"><span>我是：${S.me?esc(nm(S.me)):'未選擇'}</span><span>${S.me?`<button class="g" data-a="rename">改名</button> `:''}<button class="g" data-a="who">更換</button></span></div>
-  ${S.trip.desc?`<div class="sub" style="margin:0 4px 8px">${esc(S.trip.desc)}</div>`:''}<div class="tabs">${[['plan','行程'],['list','清單'],['exp','記帳'],['set','結算']].map(([k,n])=>`<button class="${S.tab==k?'':'g'}" data-a="tab" data-v="${k}">${n}</button>`).join('')}</div>
+  ${S.trip.desc?`<div class="sub" style="margin:0 4px 8px">${esc(S.trip.desc)}</div>`:''}<div class="tabs">${[['plan','行程'],['bk','機酒'],['list','清單'],['exp','記帳'],['set','結算']].map(([k,n])=>`<button class="${S.tab==k?'':'g'}" data-a="tab" data-v="${k}">${n}</button>`).join('')}</div>
   ${body}</main>`;
 }
 function setDock(){
@@ -376,28 +383,58 @@ function tripDays(){
   const set=new Set(),a=S.trip.start,b=S.trip.end;
   if(a){const e=b&&b>=a?b:a;let n=0;for(let d=new Date(a+'T00:00:00');ymd(d)<=e&&n<60;d.setDate(d.getDate()+1),n++)set.add(ymd(d))}
   S.stops.forEach(p=>{if(p.date)set.add(p.date)});
+  S.bk.forEach(b=>{
+    if(b.d1)set.add(b.d1);if(b.d2)set.add(b.d2);
+    if(b.type=='hotel'&&b.d1&&b.d2){let n=0;for(let d=new Date(b.d1+'T00:00:00');ymd(d)<=b.d2&&n<60;d.setDate(d.getDate()+1),n++)set.add(ymd(d))}
+  });
   return [...set].sort();
 }
 const sortedStops=()=>[...S.stops].sort((a,b)=>((a.date||'9999')+(a.time||'99:99')).localeCompare((b.date||'9999')+(b.time||'99:99')));
 const stopQ=p=>p.lat!=null?p.lat+','+p.lng:encodeURIComponent((p.name||'')+(p.addr?' '+p.addr:''));
 const tline=p=>p.mode?esc(p.mode)+(p.mins?' · 約'+p.mins+'分':'')+(p.tnote?' · '+esc(p.tnote):''):'';
+const flights=()=>S.bk.filter(b=>b.type=='flight');
+const hotels=()=>S.bk.filter(b=>b.type=='hotel');
+const hotelOn=d=>hotels().find(h=>h.d1&&h.d2&&h.d1<=d&&d<h.d2)||null;
+const hotelPrev=d=>hotels().find(h=>h.d1&&h.d2&&h.d1<d&&d<=h.d2)||null;
 function planView(){
   const days=tripDays(),und=S.stops.some(p=>!p.date),fab=`<button class="fab" data-a="addStop">＋ 新增景點</button>`;
-  if(!days.length&&!S.stops.length)return `<div class="card sub">還沒有行程。到右上角「設定」填去程、回程日期，就會出現每一天；也可以直接按「＋」新增景點。</div>`+fab;
+  if(!days.length&&!S.stops.length)return `<div class="card sub">還沒有行程。到右上角「設定」填去程、回程日期，或到「機酒」新增機票，就會出現每一天；也可以直接按「＋」新增景點。</div>`+fab;
   let cur=S.day;
   if(!(cur==='none'?und:days.includes(cur)))cur=days.includes(ymd(new Date()))?ymd(new Date()):(days[0]||'none');
   S.day=cur;
   const chips=`<div class="chips">${days.map((d,i)=>`<button class="${cur==d?'':'g'}" data-a="day" data-v="${d}">D${i+1} ${md(d)}</button>`).join('')}${und?`<button class="${cur=='none'?'':'g'}" data-a="day" data-v="none">未排日期</button>`:''}</div>`;
-  const list=sortedStops().filter(p=>cur=='none'?!p.date:p.date==cur);
+  const sl=sortedStops().filter(p=>cur=='none'?!p.date:p.date==cur);
   const col=cur=='none'?'#8a8a8a':PAL[Math.max(0,days.indexOf(cur))%PAL.length];
-  const head=`<div class="sub" style="margin:0 4px 8px"><b>${cur=='none'?'未排日期的景點':esc(dayLabel(cur))}</b>${list.length?' · '+list.length+' 個景點':''}</div>`;
-  const mini=(cur!='none'&&list.some(p=>p.lat!=null))?`<div class="card" style="padding:6px"><div class="row" style="margin:0 4px 4px"><span class="sub">當天路線</span><span><button class="g" style="padding:3px 12px;font-size:14px" data-a="mapfull">放大</button> <button class="g" style="padding:3px 12px;font-size:14px" data-a="maptog">${S.mapOpen===false?'展開':'收合'}</button></span></div>${S.mapOpen===false?'':'<div id="map"></div>'}</div>`:'';
+  const hp=cur!='none'?hotelPrev(cur):null,ho=cur!='none'?hotelOn(cur):null;
+  const items=sl.map(p=>({k:'s',p,key:(p.time||'99:99')+'2'}));
+  if(cur!='none'){
+    flights().forEach(b=>{
+      if(b.d1==cur)items.push({k:'f',b,sub:'dep',key:(b.t1||'99:97')+'1'});
+      if(b.d2==cur&&b.d2!=b.d1)items.push({k:'f',b,sub:'arr',key:(b.t2||'99:97')+'1'});
+    });
+    hotels().forEach(b=>{
+      if(b.d1==cur)items.push({k:'h',b,sub:'in',key:(b.t1||'99:98')+'1'});
+      if(b.d2==cur)items.push({k:'h',b,sub:'out',key:(b.t2||'00:01')+'1'});
+    });
+  }
+  items.sort((x,y)=>x.key.localeCompare(y.key));
+  const head=`<div class="sub" style="margin:0 4px 8px"><b>${cur=='none'?'未排日期的景點':esc(dayLabel(cur))}</b>${sl.length?' · '+sl.length+' 個景點':''}</div>${(hp||ho)?`<div class="card sub" style="padding:8px 14px">昨晚住：${hp?esc(hp.name):'—'}　今晚住：${ho?esc(ho.name):'—'}</div>`:''}`;
+  const hasPins=cur!='none'&&(sl.some(p=>p.lat!=null)||(hp&&hp.lat!=null)||(ho&&ho.lat!=null));
+  const mini=hasPins?`<div class="card" style="padding:6px"><div class="row" style="margin:0 4px 4px"><span class="sub">當天路線</span><span><button class="g" style="padding:3px 12px;font-size:14px" data-a="mapfull">放大</button> <button class="g" style="padding:3px 12px;font-size:14px" data-a="maptog">${S.mapOpen===false?'展開':'收合'}</button></span></div>${S.mapOpen===false?'':'<div id="map"></div>'}</div>`:'';
   const card=(p,n)=>{
-    const vs=Object.values(p.visited||{}).filter(Boolean).length,mine=!!p.visited?.[S.me];
-    return `<div class="card" style="padding:10px 12px"><div class="row" style="margin:0;gap:6px"><label class="chk"><input type="checkbox" data-a="visit" data-v="${p.id}" ${mine?'checked':''} aria-label="我去過了"></label><span class="num" style="background:${col}">${n}</span><button class="stp" data-a="infoStop" data-v="${p.id}"><b>${esc(p.name)}</b><div class="sub">${p.lat!=null?'<span class="badge p">地圖</span> ':''}${p.time?esc(p.time)+' · ':''}${esc(p.note||'')}</div></button><span class="sub">${vs?'去過 '+vs+'/'+M().length:''}</span></div></div>`};
+    const mine=!!p.visited?.[S.me];
+    return `<div class="card" style="padding:10px 12px"><div class="row" style="margin:0;gap:6px"><label class="chk"><input type="checkbox" data-a="visit" data-v="${p.id}" ${mine?'checked':''} aria-label="我去過了"></label><span class="num" style="background:${col}">${n}</span><button class="stp" data-a="infoStop" data-v="${p.id}"><b>${esc(p.name)}</b><div class="sub">${(p.lat!=null||p.gurl)?`<span class="badge p">${p.lat!=null?'地圖':'連結'}</span> `:''}${p.time?esc(p.time)+' · ':''}${esc(p.note||'')}</div></button></div></div>`};
   const conn=p=>`<div class="conn"><span class="sub">↓ ${p.mode?tline(p):'交通方式未設定'}</span><button class="g" style="padding:2px 12px;font-size:14px" data-a="route" data-v="${p.id}">路線</button></div>`;
-  const cards=list.length?list.map((p,i)=>(i?conn(p):'')+card(p,i+1)).join(''):`<div class="card sub">這天還沒有行程，按右下角「＋」新增。</div>`;
-  return chips+head+mini+cards+`<div class="sub" style="margin:4px 6px 0">勾選代表「我去過了」，每個人各自勾自己的。</div>`+fab;
+  const bcard=(txt,tag,bg,b,sub)=>`<div class="card" style="padding:10px 12px"><div class="row" style="margin:0;gap:8px"><span class="num" style="background:${bg}">${tag}</span><button class="stp" data-a="editBk" data-v="${b.id}">${txt}<div class="sub">${sub}</div></button></div></div>`;
+  let n=0,prevStop=false;
+  const body=items.length?items.map(it=>{
+    if(it.k=='s'){n++;const h=(prevStop?conn(it.p):'')+card(it.p,n);prevStop=true;return h}
+    prevStop=false;const b=it.b;
+    if(it.k=='f'){const t=it.sub=='dep'?b.t1:b.t2;return bcard(`<b>${it.sub=='dep'?'出發':'抵達'} · ${esc(b.no||b.dir||'機票')}</b>`,'機','#5b8fb0',b,`${t?esc(t)+' · ':''}${esc(b.from||'?')} → ${esc(b.to||'?')}`)}
+    const t=it.sub=='in'?b.t1:b.t2;
+    return bcard(`<b>${it.sub=='in'?'入住':'退房'} · ${esc(b.name)}</b>`,'宿','#8a6a45',b,`${t?esc(t)+' · ':''}${esc(b.addr||'')}`);
+  }).join(''):`<div class="card sub">這天還沒有行程，按右下角「＋」新增。</div>`;
+  return chips+head+mini+body+`<div class="sub" style="margin:4px 6px 0">勾選代表「我去過了」，只會顯示你自己的勾選。</div>`+fab;
 }
 function loadLeaflet(){
   if(window.L)return Promise.resolve();
@@ -410,18 +447,25 @@ async function drawMap(box,sel){
   if(!box)return null;
   try{await loadLeaflet()}catch(e){box.innerHTML='<div class="sub" style="padding:24px">地圖載入失敗，請確認網路連線。</div>';return null}
   if(!box.isConnected||sel==='none')return null;
-  const days=tripDays(),pts=[];
-  days.forEach((d,di)=>{if(sel!='all'&&d!=sel)return;sortedStops().filter(p=>p.date==d).forEach((p,i)=>{if(p.lat!=null)pts.push({p,n:i+1,col:PAL[di%PAL.length]})})});
+  const days=tripDays(),pts=[],hp={},line={};
+  days.forEach((d,di)=>{
+    if(sel!='all'&&d!=sel)return;
+    const col=PAL[di%PAL.length],seq=[];
+    const h0=hotelPrev(d);if(h0&&h0.lat!=null){hp[h0.id]=h0;seq.push([h0.lat,h0.lng])}
+    sortedStops().filter(p=>p.date==d).forEach((p,i)=>{if(p.lat!=null){pts.push({p,n:i+1,col});seq.push([p.lat,p.lng])}});
+    const h1=hotelOn(d);if(h1&&h1.lat!=null){hp[h1.id]=h1;seq.push([h1.lat,h1.lng])}
+    if(seq.length>1)line[d]={col,a:seq};
+  });
   const map=L.map(box);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-  const line={};
   pts.forEach(({p,n,col})=>{
     const mine=!!p.visited?.[S.me];
     L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div class="pin${mine?' v':''}" style="background:${col};color:#fff">${n}</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${esc((p.date?dayLabel(p.date):'')+' '+(p.time||''))}`);
-    (line[p.date]=line[p.date]||{col,a:[]}).a.push([p.lat,p.lng]);
   });
-  Object.values(line).forEach(o=>{if(o.a.length>1)L.polyline(o.a,{color:o.col,weight:3,opacity:.75,dashArray:'6 8'}).addTo(map)});
-  if(pts.length)map.fitBounds(pts.map(x=>[x.p.lat,x.p.lng]),{padding:[30,30],maxZoom:15});else map.setView([30,125],3);
+  Object.values(hp).forEach(h=>L.marker([h.lat,h.lng],{icon:L.divIcon({className:'',html:'<div class="pin" style="background:#8a6a45;color:#fff;font-size:13px">宿</div>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map).bindPopup(`<b>${esc(h.name)}</b><br>入住 ${esc(md(h.d1))}　退房 ${esc(md(h.d2))}`));
+  Object.values(line).forEach(o=>L.polyline(o.a,{color:o.col,weight:3,opacity:.75,dashArray:'6 8'}).addTo(map));
+  const all=[...pts.map(x=>[x.p.lat,x.p.lng]),...Object.values(hp).map(h=>[h.lat,h.lng])];
+  if(all.length)map.fitBounds(all,{padding:[30,30],maxZoom:15});else map.setView([30,125],3);
   return map;
 }
 async function initMini(){
@@ -449,7 +493,7 @@ async function runSearch(q){
   try{
     const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=zh-TW&q='+encodeURIComponent(q));
     S.sr=await r.json();
-    box.innerHTML=S.sr.length?S.sr.map((x,i)=>`<button class="card trip" style="padding:10px 14px;font-size:15px" data-a="pick" data-v="${i}">${esc(x.display_name)}</button>`).join(''):'<div class="sub">找不到。可以換個寫法（例如只留地名和路名），或貼 Google 地圖的座標。</div>';
+    box.innerHTML=S.sr.length?S.sr.map((x,i)=>`<button class="card trip" style="padding:10px 14px;font-size:15px" data-a="pick" data-v="${i}">${esc(x.display_name)}</button>`).join(''):'<div class="sub">找不到這個地址。可以改貼 Google 地圖的分享連結，或換個寫法（只留地名和路名）。</div>';
   }catch(e){box.innerHTML='<div class="sub">搜尋失敗，請稍後再試。</div>'}
 }
 function parseLinks(t){
@@ -462,13 +506,13 @@ function parseLinks(t){
 }
 function openStop(id){
   const p=S.stops.find(x=>x.id==id)||{};
-  S.sf={id:p.id||null,lat:p.lat??null,lng:p.lng??null};S.sr=[];
+  S.sf={id:p.id||null,lat:p.lat??null,lng:p.lng??null,gurl:p.gurl||null};S.sr=[];
   const dd=p.date||(S.day&&S.day!='none'?S.day:'')||ls('tl_date_'+S.tid)||'';
   sheet(`<h3>${p.id?'編輯景點':'新增景點'}</h3>
   <label>景點名稱</label><div class="row" style="gap:6px"><input id="sn" value="${esc(p.name||'')}" placeholder="例如：首里城"><button data-a="srch" style="flex:none;padding:10px 16px">搜尋</button></div>
-  <label>地址（搜尋不到名稱時用）</label><div class="row" style="gap:6px"><input id="sa" value="${esc(p.addr||'')}" placeholder="貼上地址、座標或地圖連結"><button data-a="geo" style="flex:none;padding:10px 16px">定位</button></div>
+  <label>地址或 Google 地圖連結（搜尋不到名稱時用）</label><div class="row" style="gap:6px"><input id="sa" value="${esc(p.addr||'')}" placeholder="貼上地址或 Google 地圖連結"><button data-a="geo" style="flex:none;padding:10px 16px">定位</button></div>
   <div id="sres"></div>
-  <div id="spos" class="sub">${p.lat!=null?'已設定地圖位置':'還沒有地圖位置（可以略過）'}</div>
+  <div id="spos" class="sub">${p.lat!=null?'已設定地圖位置':p.gurl?'已記下 Google 地圖連結':'還沒有地圖位置（可以略過）'}</div>
   <label>日期</label><input id="sd" type="date" value="${esc(dd)}">
   <label>時間</label><input id="stm" type="time" value="${esc(p.time||'')}">
   <label>備註</label><input id="sm" value="${esc(p.note||'')}" placeholder="例如：門票 400 元">
@@ -483,6 +527,59 @@ function openInfo(id){
   sheet(`<h3>${esc(p.name)}</h3><div class="sub">${p.date?esc(dayLabel(p.date)):'未排日期'}${p.time?' · '+esc(p.time):''}</div>${p.addr?`<div class="sub">${esc(p.addr)}</div>`:''}${p.note?`<p>${esc(p.note)}</p>`:''}${p.mode?`<div class="sub">從上一站：${tline(p)}</div>`:''}${lk?`<label>連結</label><div>${lk}</div>`:''}
   <div class="btns"><button data-a="gmap" data-v="${id}">在 Google 地圖開啟</button></div>
   <div class="btns"><button class="g" data-a="route" data-v="${id}">路線（從上一站）</button><button class="g" data-a="editStop" data-v="${id}">編輯</button></div>`);
+}
+/* flights & hotels */
+const fmtT=(d,t)=>d?md(d)+(t?' '+t:''):'';
+const nights=(a,b)=>a&&b?Math.max(0,Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5)):0;
+const lksHtml=b=>(b.links||[]).map(l=>`<a class="lk" href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t)}</a>`).join('');
+function bkView(){
+  const key=b=>(b.d1||'9999')+(b.t1||'99:99');
+  const fl=flights().sort((a,b)=>key(a).localeCompare(key(b))),ho=hotels().sort((a,b)=>key(a).localeCompare(key(b)));
+  const fcard=b=>`<div class="card"><button class="stp" style="width:100%" data-a="editBk" data-v="${b.id}"><div class="row" style="margin:0"><b>${esc(b.dir||'機票')}${b.no?' · '+esc(b.no):''}</b><span class="sub">${b.pnr?'代號 '+esc(b.pnr):''}</span></div><div>${esc(b.from||'?')} → ${esc(b.to||'?')}</div><div class="sub">${esc(fmtT(b.d1,b.t1))} → ${esc(b.d2&&b.d2!=b.d1?fmtT(b.d2,b.t2):(b.t2||''))}</div>${b.note?`<div class="sub">${esc(b.note)}</div>`:''}</button>${lksHtml(b)?`<div style="margin-top:6px">${lksHtml(b)}</div>`:''}</div>`;
+  const hcard=b=>`<div class="card"><button class="stp" style="width:100%" data-a="editBk" data-v="${b.id}"><div class="row" style="margin:0"><b>${esc(b.name)}</b><span class="sub">${b.pnr?'編號 '+esc(b.pnr):''}</span></div><div class="sub">${esc(fmtT(b.d1,b.t1))} 入住 → ${esc(fmtT(b.d2,b.t2))} 退房${nights(b.d1,b.d2)?' · '+nights(b.d1,b.d2)+' 晚':''}</div>${b.addr?`<div class="sub">${esc(b.addr)}</div>`:''}${b.note?`<div class="sub">${esc(b.note)}</div>`:''}</button><div style="margin-top:6px"><button class="g" style="padding:4px 14px;font-size:15px;margin:4px 6px 4px 0" data-a="bmap" data-v="${b.id}">在 Google 地圖開啟</button>${lksHtml(b)}</div></div>`;
+  return `<div class="sub" style="margin:0 4px 8px"><b>機票</b>　設好時間後會自動排進行程</div>${fl.length?fl.map(fcard).join(''):`<div class="card sub">還沒有機票。按右下角「＋」新增。</div>`}<div class="sub" style="margin:14px 4px 8px"><b>飯店</b>　每天的路線可以從飯店出發、回到飯店</div>${ho.length?ho.map(hcard).join(''):`<div class="card sub">還沒有飯店。按右下角「＋」新增。</div>`}<button class="fab" data-a="newBk">＋ 新增機票／飯店</button>`;
+}
+function openFlight(id){
+  const b=S.bk.find(x=>x.id==id)||{};S.bi=b.id||null;
+  sheet(`<h3>${b.id?'編輯機票':'新增機票'}</h3>
+  <label>類型</label><select id="fdir">${['去程','回程','轉機／其他'].map(x=>`<option ${b.dir==x?'selected':''}>${x}</option>`).join('')}</select>
+  <label>航班</label><input id="fno" value="${esc(b.no||'')}" placeholder="例如：虎航 IT202">
+  <label>出發地與目的地</label><div class="row" style="gap:6px"><input id="ffr" value="${esc(b.from||'')}" placeholder="桃園 TPE"><input id="fto" value="${esc(b.to||'')}" placeholder="那霸 OKA"></div>
+  <label>出發日期與時間</label><div class="row" style="gap:6px"><input id="fd1" type="date" value="${esc(b.d1||S.trip.start||'')}"><input id="ft1" type="time" value="${esc(b.t1||'')}"></div>
+  <label>抵達日期與時間</label><div class="row" style="gap:6px"><input id="fd2" type="date" value="${esc(b.d2||'')}"><input id="ft2" type="time" value="${esc(b.t2||'')}"></div>
+  <label>訂位代號</label><input id="fpn" value="${esc(b.pnr||'')}">
+  <label>備註</label><input id="fnt" value="${esc(b.note||'')}" placeholder="例如：託運行李 20kg">
+  <label>連結（訂票、電子機票，一行一個）</label><textarea id="fln" rows="2" placeholder="例如：電子機票 https://...">${esc((b.links||[]).map(l=>l.t+' '+l.u).join('\n'))}</textarea>
+  <div class="btns">${b.id?`<button class="d" data-a="delBk">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="saveFlight">儲存</button></div>`);
+}
+function openHotel(id){
+  const b=S.bk.find(x=>x.id==id)||{};S.bi=b.id||null;
+  S.sf={id:b.id||null,lat:b.lat??null,lng:b.lng??null,gurl:b.gurl||null};S.sr=[];
+  sheet(`<h3>${b.id?'編輯飯店':'新增飯店'}</h3>
+  <label>飯店名稱</label><div class="row" style="gap:6px"><input id="sn" value="${esc(b.name||'')}" placeholder="例如：那霸 ○○ 飯店"><button data-a="srch" style="flex:none;padding:10px 16px">搜尋</button></div>
+  <label>地址或 Google 地圖連結</label><div class="row" style="gap:6px"><input id="sa" value="${esc(b.addr||'')}" placeholder="貼上地址或 Google 地圖連結"><button data-a="geo" style="flex:none;padding:10px 16px">定位</button></div>
+  <div id="sres"></div>
+  <div id="spos" class="sub">${b.lat!=null?'已設定地圖位置':b.gurl?'已記下 Google 地圖連結':'還沒有地圖位置（可以略過）'}</div>
+  <label>入住日期與時間</label><div class="row" style="gap:6px"><input id="hd1" type="date" value="${esc(b.d1||S.trip.start||'')}"><input id="ht1" type="time" value="${esc(b.t1||'')}"></div>
+  <label>退房日期與時間</label><div class="row" style="gap:6px"><input id="hd2" type="date" value="${esc(b.d2||S.trip.end||'')}"><input id="ht2" type="time" value="${esc(b.t2||'')}"></div>
+  <label>訂房編號</label><input id="hpn" value="${esc(b.pnr||'')}">
+  <label>備註</label><input id="hnt" value="${esc(b.note||'')}" placeholder="例如：含早餐">
+  <label>連結（訂房確認信、官網，一行一個）</label><textarea id="hln" rows="2">${esc((b.links||[]).map(l=>l.t+' '+l.u).join('\n'))}</textarea>
+  <div class="btns">${b.id?`<button class="d" data-a="delBk">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="saveHotel">儲存</button></div>`);
+}
+async function autoDates(extra){
+  if(S.trip.start)return;
+  const ds=[...extra];S.bk.forEach(b=>{b.d1&&ds.push(b.d1);b.d2&&ds.push(b.d2)});
+  const v=ds.filter(Boolean).sort();if(!v.length)return;
+  try{await updateDoc(doc(db,'trips',S.tid),{start:v[0],end:v[v.length-1]})}catch(e){}
+}
+async function saveBk(data){
+  try{
+    if(S.bi)await updateDoc(doc(db,'trips',S.tid,'bookings',S.bi),data);
+    else await addDoc(collection(db,'trips',S.tid,'bookings'),{...data,ts:serverTimestamp()});
+    await autoDates([data.d1,data.d2]);
+    S.day=data.d1||S.day;closeSheet();
+  }catch(e){toast('儲存失敗：'+(e.code||e.message))}
 }
 /* lists: private (own account or this phone) and shared */
 const DEFLISTS=()=>[{id:'pre',name:'行前準備',items:[]},{id:'buy',name:'購買清單',items:[]}];
@@ -677,6 +774,34 @@ const act={
   newTrip:newTripSheet,
   close:closeSheet,
   set:openSettings,
+  mems:id=>{
+    const i=S.info[id],mem=i&&i!=='l'?(i.members||[]):[];
+    sheet(`<h3>旅伴（${mem.length} 人）</h3><div>${mem.map(m=>`<span class="nm">${esc(m.name)}</span>`).join('')}</div><div class="btns"><button class="g" data-a="close">關閉</button></div>`);
+  },
+  newBk:()=>sheet(`<h3>新增</h3><div class="btns"><button data-a="newFlight">機票</button><button data-a="newHotel">飯店</button></div><div class="btns"><button class="g" data-a="close">取消</button></div>`),
+  newFlight:()=>openFlight(),
+  newHotel:()=>openHotel(),
+  editBk:id=>{const b=S.bk.find(x=>x.id==id);if(!b)return;b.type=='hotel'?openHotel(id):openFlight(id)},
+  bmap:id=>{const b=S.bk.find(x=>x.id==id);if(b)window.open(b.gurl||('https://www.google.com/maps/search/?api=1&query='+stopQ(b)),'_blank','noopener')},
+  saveFlight:()=>{
+    const d1=$('#fd1').value;if(!d1)return toast('請填出發日期，才能排進行程');
+    const d2=$('#fd2').value||d1;
+    if(d2<d1)return toast('抵達日期不能早於出發日期');
+    saveBk({type:'flight',dir:$('#fdir').value,no:$('#fno').value.trim(),from:$('#ffr').value.trim(),to:$('#fto').value.trim(),d1,t1:$('#ft1').value,d2,t2:$('#ft2').value,pnr:$('#fpn').value.trim(),note:$('#fnt').value.trim(),links:parseLinks($('#fln').value)});
+  },
+  saveHotel:()=>{
+    const name=$('#sn').value.trim();if(!name)return toast('請輸入飯店名稱');
+    const d1=$('#hd1').value,d2=$('#hd2').value;
+    if(!d1||!d2)return toast('請填入住和退房日期');
+    if(d2<=d1)return toast('退房日期要晚於入住日期');
+    const links=parseLinks($('#hln').value);let {lat,lng}=S.sf;
+    if(lat==null)for(const l of links){const c=parseCoords(l.u);if(c){lat=c[0];lng=c[1];break}}
+    saveBk({type:'hotel',name,addr:$('#sa').value.trim(),lat,lng,gurl:S.sf.gurl||null,d1,t1:$('#ht1').value,d2,t2:$('#ht2').value,pnr:$('#hpn').value.trim(),note:$('#hnt').value.trim(),links});
+  },
+  delBk:async()=>{
+    if(!confirm('確定刪除這筆？'))return;
+    try{await deleteDoc(doc(db,'trips',S.tid,'bookings',S.bi));closeSheet()}catch(e){toast('刪除失敗：'+(e.code||e.message))}
+  },
   addStop:()=>S.me?openStop():openWho(),
   editStop:id=>openStop(id),
   infoStop:id=>openInfo(id),
@@ -686,7 +811,7 @@ const act={
     try{await updateDoc(doc(db,'trips',S.tid,'stops',id),{['visited.'+S.me]:el.checked})}
     catch(e){toast('更新失敗：'+(e.code||e.message));render()}
   },
-  gmap:id=>{const p=S.stops.find(x=>x.id==id);if(p)window.open('https://www.google.com/maps/search/?api=1&query='+stopQ(p),'_blank','noopener')},
+  gmap:id=>{const p=S.stops.find(x=>x.id==id);if(p)window.open(p.gurl||('https://www.google.com/maps/search/?api=1&query='+stopQ(p)),'_blank','noopener')},
   route:id=>{
     const p=S.stops.find(x=>x.id==id);if(!p)return;
     const day=sortedStops().filter(q=>q.date==p.date),i=day.findIndex(q=>q.id==id),pr=(p.date&&i>0)?day[i-1]:null;
@@ -698,11 +823,16 @@ const act={
   mf:async v=>{S.mf=v;$('#mfc').innerHTML=mfChips();try{S.map2&&S.map2.remove()}catch(e){}S.map2=await drawMap($('#map2'),S.mf)},
   srch:()=>{const q=$('#sn').value.trim();if(!q)return toast('先輸入景點名稱');runSearch(q)},
   geo:()=>{
-    const q=$('#sa').value.trim();if(!q)return toast('先貼上地址或座標');
+    const q=$('#sa').value.trim();if(!q)return toast('先貼上地址或 Google 地圖連結');
+    const url=(q.match(/https?:\/\/\S+/)||[])[0],rest=url?q.replace(url,'').trim():q;
     const c=parseCoords(q);
-    if(c){S.sf.lat=c[0];S.sf.lng=c[1];$('#spos').textContent='已從座標設定位置';$('#sres').innerHTML='';return}
-    if(/goo\.gl|maps\.app/i.test(q))return toast('短連結無法直接讀取，請改貼地址，或在地圖 app 長按位置複製座標');
-    runSearch(q);
+    if(url&&rest&&$('#sn')&&!$('#sn').value.trim())$('#sn').value=rest.split('\n')[0].slice(0,40);
+    if(c){S.sf.lat=c[0];S.sf.lng=c[1];if(url)S.sf.gurl=url;$('#spos').textContent='已從連結設定地圖位置';$('#sres').innerHTML='';return}
+    if(url&&/google\.[a-z.]+\/maps|goo\.gl|maps\.app/i.test(url)){
+      S.sf.gurl=url;$('#sres').innerHTML='';
+      $('#spos').textContent='已記下 Google 地圖連結，點開景點就能直接用 Google 地圖開啟。這種連結裡沒有座標，所以我們的地圖上不會有圖釘。';return;
+    }
+    runSearch(rest||q);
   },
   pick:i=>{
     const x=S.sr[+i];if(!x)return;
@@ -715,7 +845,7 @@ const act={
     const date=$('#sd').value,links=parseLinks($('#sl').value);
     let {lat,lng}=S.sf;
     if(lat==null)for(const l of links){const c=parseCoords(l.u);if(c){lat=c[0];lng=c[1];break}}
-    const data={name,date,time:$('#stm').value,note:$('#sm').value.trim(),addr:$('#sa').value.trim(),lat,lng,mode:$('#smd').value,mins:+$('#smn').value||null,tnote:$('#stn').value.trim(),links};
+    const data={name,date,time:$('#stm').value,note:$('#sm').value.trim(),addr:$('#sa').value.trim(),lat,lng,gurl:S.sf.gurl||null,mode:$('#smd').value,mins:+$('#smn').value||null,tnote:$('#stn').value.trim(),links};
     try{
       if(S.sf.id)await updateDoc(doc(db,'trips',S.tid,'stops',S.sf.id),data);
       else await addDoc(collection(db,'trips',S.tid,'stops'),{...data,visited:{},ts:serverTimestamp()});
@@ -847,6 +977,10 @@ const act={
     }catch(e){toast('建立失敗：'+(e.code||e.message))}
   }
 };
+document.addEventListener('keydown',ev=>{
+  const t=ev.target;
+  if((ev.key=='Enter'||ev.key==' ')&&t.getAttribute&&t.getAttribute('role')=='button'){ev.preventDefault();t.click()}
+});
 document.addEventListener('click',ev=>{
   if(ev.target.id=='sheet'){closeSheet();return}
   if(ev.target.id=='sheet2'){closeSheet2();return}
