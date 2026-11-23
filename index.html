@@ -558,7 +558,7 @@ function openInfo(id){
   if(p.pc>0)phShow(['trips',S.tid,'stops',id],null,'pview');
 }
 /* photos: squeezed hard and stored in Firestore (the free quota is small) */
-const PHMAX=5,PHCAP=100*1024*1024,PHTARGET=190000;
+const PHMAX=3,PHCAP=100*1024*1024,PHTARGET=190000;
 S.pcache={};
 function loadImg(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('讀不了這個檔案'))};im.src=u})}
 async function compress(file){
@@ -611,7 +611,7 @@ async function phSave(ref,item,extra){
   let b=0,ok=0;
   for(const f of pend){
     try{await addDoc(collection(db,...ref,'files'),{data:f.data,w:f.w,h:f.h,n:f.n,by:S.me||null,...(item?{item}:{}),...(extra||{}),ts:serverTimestamp()});b+=f.n;ok++}
-    catch(e){toast('照片上傳失敗：'+(e.code||e.message));break}
+    catch(e){toast(e.code=='permission-denied'?'沒有權限：請先把 Firestore 規則換成最新版（照片需要）':'照片上傳失敗：'+(e.code||e.message));break}
   }
   S.ph.pend=[];
   if(ok)await phCount(ref,b,ok,item);
@@ -755,12 +755,21 @@ function listView(){
     const urls=(it.n||'').match(/https?:\/\/\S+/g)||[],note=(it.n||'').replace(/https?:\/\/\S+/g,'').trim();
     const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return '連結'}};
     const chips=urls.length?`<div style="margin:0 0 4px 36px">${urls.map(u=>`<a class="lk" style="padding:4px 12px;font-size:15px" href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))}</a>`).join('')}</div>`:'';
-    const sub=[note,it.pc>0?'照片 '+it.pc:'',(sc=='s'&&it.d&&it.by)?nm(it.by)+' 完成':''].filter(Boolean).join(' · ');
+    const sub=[note,it.pc>0?'照片 '+it.pc:''].filter(Boolean).join(' · ');
     return `<div class="row" style="margin:4px 0;align-items:flex-start;gap:6px"><label class="chk" style="padding-top:4px"><input type="checkbox" data-a="ltog" data-v="${sc}|${lid}|${it.id}" ${it.d?'checked':''} aria-label="完成"></label><button class="stp${it.d?' ldone':''}" data-a="litem" data-v="${sc}|${lid}|${it.id}"><span>${esc(it.t)}</span>${sub?`<div class="sub">${esc(sub)}</div>`:''}</button></div>${chips}`;
   };
   const card=(l,sc)=>`<div class="card"><div class="row" style="margin:0 0 4px"><b>${esc(l.name)}</b><span><button class="g" style="padding:3px 12px;font-size:14px" data-a="lren" data-v="${sc}|${l.id}">改名</button> <button class="g" style="padding:3px 12px;font-size:14px" data-a="ldel" data-v="${sc}|${l.id}">刪除</button></span></div>${l.items.map(it=>row(it,sc,l.id)).join('')}<button class="g" style="margin-top:8px;width:100%" data-a="litem" data-v="${sc}|${l.id}|">＋ 新增項目</button></div>`;
   return `<div class="sub" style="margin:0 4px 8px"><b>我的私人清單</b>　${S.user?'只有你看得到，已跟著帳號同步':'只有你看得到，目前存在這支手機；登入後會跟著帳號同步'}</div>${privLists().map(l=>card(l,'p')).join('')}<button class="g" style="width:100%;margin-bottom:18px" data-a="lnew" data-v="p">＋ 新增私人清單</button>
   <div class="sub" style="margin:0 4px 8px"><b>共用清單</b>　旅伴都看得到</div>${sharedLists().length?sharedLists().map(l=>card(l,'s')).join(''):`<div class="card sub">還沒有共用清單，例如「大家要一起帶的東西」。</div>`}<button class="g" style="width:100%" data-a="lnew" data-v="s">＋ 新增共用清單</button>`;
+}
+function openItemView(sc,lid,iid){
+  const l=(sc=='p'?privLists():sharedLists()).find(x=>x.id==lid);if(!l)return;
+  const it=l.items.find(x=>x.id==iid);if(!it)return;
+  const urls=(it.n||'').match(/https?:\/\/\S+/g)||[],note=(it.n||'').replace(/https?:\/\/\S+/g,'').trim();
+  const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return '連結'}};
+  const ref=sc=='p'?(S.user?['users',S.user.uid,'plists',S.tid]:null):['trips',S.tid,'lists',lid];
+  sheet(`<h3>${esc(it.t)}</h3><div class="sub">${esc(l.name)}${it.d?' · 已完成':''}</div>${note?`<p style="white-space:pre-wrap">${esc(note)}</p>`:'<p class="sub">沒有備註</p>'}${urls.length?`<div>${urls.map(u=>`<a class="lk" href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))}</a>`).join('')}</div>`:''}<div id="pview"></div><div class="btns"><button class="g" data-a="close">關閉</button><button data-a="litemedit" data-v="${sc}|${lid}|${iid}">編輯</button></div>`);
+  if(it.pc>0&&ref)phShow(ref,iid,'pview');
 }
 function openItem(sc,lid,iid){
   const l=(sc=='p'?privLists():sharedLists()).find(x=>x.id==lid);if(!l)return;
@@ -769,7 +778,7 @@ function openItem(sc,lid,iid){
   const ex=/買/.test(l.name)?['例如：藥妝店的防曬乳','品牌、數量、在哪裡買，也可以貼商品網址']:/行前|準備/.test(l.name)?['例如：護照影本','例如：有效期限要 6 個月以上']:['例如：項目名稱','備註，也可以貼網址'];
   sheet(`<h3>${iid?'編輯項目':'新增項目'}</h3><label>項目</label><input id="lt" value="${esc(it.t||'')}" placeholder="${ex[0]}"><label>備註（可以貼網址）</label><textarea id="lnn" rows="3" placeholder="${ex[1]}">${esc(it.n||'')}</textarea>${pRef?'<label>照片／截圖</label><div id="pbox"></div>':'<div class="sub" style="margin-top:8px">私人清單的照片要先登入才能存。</div>'}<div class="btns">${iid?`<button class="d" data-a="lrm">刪除</button>`:`<button class="g" data-a="close">取消</button>`}<button data-a="lsave">儲存</button></div>`);
   if(pRef)phLoad(pRef,iid||null,{sc,lid});
-  setTimeout(()=>$('#lt')&&$('#lt').focus(),60);
+  if(!iid)setTimeout(()=>$('#lt')&&$('#lt').focus(),60);
 }
 /* stats */
 function pie(items){
@@ -1074,7 +1083,8 @@ const act={
     try{await phPurge(['trips',S.tid,'lists',lid]);await deleteDoc(doc(db,'trips',S.tid,'lists',lid))}catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
   ltog:(v,el)=>{const [sc,lid,iid]=v.split('|');mutList(sc,lid,l=>{const it=l.items.find(x=>x.id==iid);if(it){it.d=el.checked;it.by=el.checked?(S.me||null):null}})},
-  litem:v=>{const [sc,lid,iid]=v.split('|');openItem(sc,lid,iid)},
+  litem:v=>{const [sc,lid,iid]=v.split('|');iid?openItemView(sc,lid,iid):openItem(sc,lid,'')},
+  litemedit:v=>{const [sc,lid,iid]=v.split('|');openItem(sc,lid,iid)},
   lsave:async()=>{
     const t=$('#lt').value.trim();if(!t)return toast('請輸入項目');
     const {sc,lid,iid}=S.li,n=$('#lnn').value.trim(),nid=iid||('i'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
