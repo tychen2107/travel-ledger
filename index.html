@@ -59,6 +59,7 @@ label.chk{display:flex;align-items:center;gap:8px;margin:0;color:var(--tx);font-
 .tabs button{padding:8px 4px;font-size:16.5px}
 .stp{flex:1;text-align:left;background:none;box-shadow:none;padding:2px 8px;font-weight:400;color:var(--tx);border-radius:12px}
 #map{height:210px;border-radius:18px;position:relative;isolation:isolate;overflow:hidden}
+#fmap{height:min(48vh,400px);border-radius:18px;position:relative;isolation:isolate;overflow:hidden}
 #map2{height:min(62vh,520px);border-radius:20px;position:relative;isolation:isolate;overflow:hidden}
 .pin{width:30px;height:30px;border-radius:50%;background:var(--pri);color:var(--on);border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 3px 8px rgba(0,0,0,.25)}
 :root,[data-t=light]{--bg:#f5efe5;--card:#fffaf2c8;--inp:#fffdf8;--tx:#4a3b2d;--sub:#85735f;--pri:#e8cba3;--sec:#efe3cf;--on:#4a3b2d;--bd:#e2d3bc;--sh:0 8px 18px rgba(120,95,60,.16);--warn:#a8570c;--warnb:#fdeedd;--perb:#e4eefb;--per:#2f5fae;--pos:#2f8f6b;--neg:#c0392b;--tbg:#4a3b2d;--tfg:#fffaf2;--ov:rgba(60,45,30,.38);--po:.55;--paper:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27240%27%20height%3D%27240%27%3E%3Cfilter%20id%3D%27f%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%271.8%200.02%27%20numOctaves%3D%273%27%20seed%3D%272%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.431%200%200%200%200%200.333%200%200%200%200%200.216%200%200%200%200.9%20-0.36%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url%28%23f%29%27%2F%3E%3C%2Fsvg%3E");--wash:radial-gradient(ellipse 52% 46% at 50% 64%,rgba(226,196,150,.62),rgba(226,196,150,.26) 58%,transparent 100%),radial-gradient(ellipse 30% 36% at 24% 68%,rgba(214,178,128,.34),transparent 100%),radial-gradient(ellipse 28% 34% at 78% 66%,rgba(214,178,128,.30),transparent 100%)}
@@ -160,6 +161,7 @@ const allTrips=()=>{const m=new Map();[...S.local,...S.cloud].forEach(t=>m.set(t
 onAuthStateChanged(auth,u=>{
   S.user=u;if(S.u1){S.u1();S.u1=null}
   subPriv();
+  if(u)footPull();
   if(u){
     S.u1=onSnapshot(doc(db,'users',u.uid),d=>{S.cloud=d.data()?.trips||[];render()});
     if(S.local.length)setDoc(doc(db,'users',u.uid),{trips:arrayUnion(...S.local)},{merge:true}).catch(()=>{});
@@ -170,17 +172,17 @@ onAuthStateChanged(auth,u=>{
 /* ---------- open / leave trip ---------- */
 function openTrip(id,push=true){
   S.u2&&S.u2();S.u3&&S.u3();S.u4&&S.u4();S.u5&&S.u5();S.u6&&S.u6();S.u7&&S.u7();
-  Object.assign(S,{tid:id,trip:null,exps:[],stops:[],bk:[],slists:[],map:null,tab:'plan',flt:'all',me:ls('tl_me_'+id)});
-  if(push)history.pushState({},'','?t='+id);
+  Object.assign(S,{tid:id,trip:null,exps:[],stopsLoaded:false,stops:[],bk:[],slists:[],map:null,tab:'plan',flt:'all',me:ls('tl_me_'+id)});
+  if(push)try{history.pushState({},'','?t='+id)}catch(e){}
   S.u2=onSnapshot(doc(db,'trips',id),d=>{
     if(!d.exists())S.trip=false;
-    else{S.trip={id,...d.data()};addTrip(id,S.trip.name)}
+    else{S.trip={id,...d.data()};addTrip(id,S.trip.name);footRecord()}
     render();
   },()=>{S.trip=false;render()});
   S.u5=onSnapshot(collection(db,'trips',id,'lists'),s=>{S.slists=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.ts?.seconds||0)-(b.ts?.seconds||0));render()},()=>{});
   subPriv();
   S.u7=onSnapshot(query(collection(db,'trips',id,'bookings'),orderBy('ts','asc')),s=>{S.bk=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
-  S.u4=onSnapshot(query(collection(db,'trips',id,'stops'),orderBy('ts','asc')),s=>{S.stops=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
+  S.u4=onSnapshot(query(collection(db,'trips',id,'stops'),orderBy('ts','asc')),s=>{S.stops=s.docs.map(d=>({id:d.id,...d.data()}));S.stopsLoaded=true;footRecord();render()},()=>{});
   S.u3=onSnapshot(query(collection(db,'trips',id,'expenses'),orderBy('ts','desc')),s=>{
     S.exps=s.docs.map(d=>({id:d.id,...d.data()}));render();
   });
@@ -201,10 +203,20 @@ function fmtRange(a,b){
   const B=new Date(b+'T00:00:00');
   return f(A,A.getFullYear()!=cy)+' – '+(B.getFullYear()!=A.getFullYear()?f(B,true):(B.getMonth()+1)+'/'+B.getDate());
 }
+async function dropFromList(id){
+  S.local=S.local.filter(t=>t.id!=id);ls('tl_trips',JSON.stringify(S.local));
+  const had=S.cloud.some(t=>t.id==id);S.cloud=S.cloud.filter(t=>t.id!=id);
+  if(S.user&&had){try{await setDoc(doc(db,'users',S.user.uid),{trips:S.cloud},{merge:true})}catch(e){toast('更新帳號清單失敗：'+(e.code||e.message))}}
+}
+function deletedCards(){
+  const d=allTrips().filter(t=>{const i=S.info[t.id];return i&&i!=='l'&&i.deleted});
+  if(!d.length)return '';
+  return `<div class="sub" style="margin:18px 4px 6px"><b>已刪除的旅程</b>　資料還在，可以復原</div>`+d.map(t=>`<div class="card" style="padding:12px 14px"><b>${esc(S.info[t.id].name||t.name)}</b><div class="btns" style="margin-top:8px"><button data-a="restoreId" data-v="${esc(t.id)}">復原</button><button class="g" data-a="dropId" data-v="${esc(t.id)}">從清單移除</button></div></div>`).join('');
+}
 function goHome(push=true){
   S.info={};
   S.u2&&S.u2();S.u3&&S.u3();S.u4&&S.u4();S.u5&&S.u5();S.u6&&S.u6();S.u7&&S.u7();S.tid=null;S.trip=null;
-  if(push)history.pushState({},'','./');
+  if(push)try{history.pushState({},'','./')}catch(e){}
   render();
 }
 window.addEventListener('popstate',()=>{const t=new URLSearchParams(location.search).get('t');t?openTrip(t,false):goHome(false)});
@@ -283,6 +295,76 @@ function origView(){
 
 /* ---------- views ---------- */
 function loginBtn(){return S.user?`<button class="g" data-a="logout">登出</button>`:`<button class="g" data-a="login">登入</button>`}
+/* footprints: places I ticked as visited, across all trips */
+const footCache=()=>{try{return JSON.parse(ls('tl_foot')||'{}')||{}}catch(e){return {}}};
+function footSave(c){ls('tl_foot',JSON.stringify(c));if(S.user)setDoc(doc(db,'users',S.user.uid,'meta','foot'),{trips:c}).catch(()=>{})}
+const r5=x=>Math.round(x*1e5)/1e5;
+function footRecord(){
+  if(!S.tid||!S.trip||!S.me||!S.stopsLoaded)return;
+  const c=footCache();
+  if(S.trip.deleted){if(c[S.tid]){delete c[S.tid];footSave(c)}return}
+  const pl=S.stops.filter(x=>x.lat!=null&&x.visited&&x.visited[S.me]).map(x=>({n:x.name,la:r5(x.lat),lo:r5(x.lng),d:x.date||null})),old=c[S.tid];
+  if(old&&old.n==S.trip.name&&old.s==(S.trip.start||null)&&JSON.stringify(old.p)==JSON.stringify(pl))return;
+  c[S.tid]={n:S.trip.name,s:S.trip.start||null,t:Date.now(),p:pl};footSave(c);
+}
+async function footPull(){
+  if(!S.user)return;
+  try{
+    const d=await getDoc(doc(db,'users',S.user.uid,'meta','foot')),cloud=d.exists()?(d.data().trips||{}):{},loc=footCache();
+    for(const k in cloud)if(!loc[k]||(cloud[k].t||0)>(loc[k].t||0))loc[k]=cloud[k];
+    ls('tl_foot',JSON.stringify(loc));
+    if(Object.keys(loc).some(k=>!cloud[k]||(loc[k].t||0)>(cloud[k].t||0)))await setDoc(doc(db,'users',S.user.uid,'meta','foot'),{trips:loc});
+    if(!S.tid)render();
+  }catch(e){}
+}
+async function footRefresh(){
+  const c=footCache();let skipped=0,ok=0;toast('更新中…');
+  for(const t of allTrips()){
+    const me=ls('tl_me_'+t.id);if(!me){skipped++;continue}
+    try{
+      const [tr,st]=await Promise.all([getDoc(doc(db,'trips',t.id)),getDocs(collection(db,'trips',t.id,'stops'))]);
+      if(!tr.exists()||tr.data().deleted){delete c[t.id];continue}
+      const T=tr.data();
+      c[t.id]={n:T.name,s:T.start||null,t:Date.now(),p:st.docs.map(d=>d.data()).filter(x=>x.lat!=null&&x.visited&&x.visited[me]).map(x=>({n:x.name,la:r5(x.lat),lo:r5(x.lng),d:x.date||null}))};ok++;
+    }catch(e){}
+  }
+  footSave(c);S.fskip=skipped;toast('已更新 '+ok+' 趟旅程'+(skipped?'，'+skipped+' 趟沒選過「我是誰」所以略過':''));render();
+}
+function footModel(){
+  const c=footCache(),trips=Object.entries(c).map(([id,v])=>({id,...v})).filter(t=>t.p&&t.p.length).sort((a,b)=>(a.s||'').localeCompare(b.s||''));
+  const yr=(p,t)=>((p.d||t.s||'')+'').slice(0,4);
+  const years=[...new Set(trips.flatMap(t=>t.p.map(p=>yr(p,t))).filter(Boolean))].sort();
+  const fy=years.includes(S.fy)?S.fy:'all';
+  let view=trips.map(t=>({...t,p:t.p.filter(p=>fy=='all'||yr(p,t)==fy)})).filter(t=>t.p.length);
+  if(S.ft&&view.some(t=>t.id==S.ft))view=view.filter(t=>t.id==S.ft);else S.ft=null;
+  const ci=id=>PAL[Math.max(0,trips.findIndex(t=>t.id==id))%PAL.length];
+  return {trips,view,years,fy,ci,total:view.reduce((a,t)=>a+t.p.length,0)};
+}
+const homeTabs=()=>`<div class="tabs" style="margin:6px 0 12px"><button class="${S.hv=='foot'?'g':''}" data-a="hv" data-v="trips">旅程</button><button class="${S.hv=='foot'?'':'g'}" data-a="hv" data-v="foot">足跡</button></div>`;
+function footView(){
+  const m=footModel();
+  const chip=(k,t)=>`<button class="${m.fy==k?'':'g'}" data-a="fyear" data-v="${k}">${t}</button>`;
+  const body=m.view.length?`<div class="card" style="padding:8px"><div id="fmap"></div></div>
+  <div class="card">${m.view.map(t=>`<button class="stp" style="width:100%;padding:6px 8px" data-a="ftrip" data-v="${t.id}"><div class="row" style="margin:0"><span><i class="dot" style="background:${m.ci(t.id)}"></i><b>${esc(t.n)}</b></span><span class="amt">${t.p.length} 個</span></div><div class="sub">${t.s?esc(fmtRange(t.s,null))+' · ':''}${esc(t.p.map(p=>p.n).join('、'))}</div></button>`).join('')}${S.ft?'<div class="sub" style="margin:4px 8px">再點一次可以回到全部</div>':''}</div>`
+  :`<div class="card sub">還沒有足跡。在旅程的行程裡勾選「我去過了」，而且景點有設定地圖位置，就會出現在這裡。</div>`;
+  return `<div class="sub" style="margin:0 4px 8px"><b>我的足跡</b>　去過 ${m.total} 個地方，${m.view.length} 趟旅程</div>${m.years.length>1?`<div class="chips">${chip('all','全部')}${m.years.map(y=>chip(y,y)).join('')}</div>`:''}${body}
+  <div class="row" style="margin:6px 4px 0"><span class="sub" style="font-size:14px">打開旅程時會自動更新；${S.user?'登入中，換手機也看得到。':'登入後換手機也看得到。'}${S.fskip?' 有 '+S.fskip+' 趟沒選過「我是誰」，沒算進來。':''}</span><button class="g" style="flex:none;padding:6px 14px;font-size:15px" data-a="frefresh">更新全部</button></div>`;
+}
+async function initFoot(){
+  const el=$('#fmap');if(!el)return;
+  try{S.fmap&&S.fmap.remove()}catch(e){}S.fmap=null;
+  try{await loadLeaflet()}catch(e){el.innerHTML='<div class="sub" style="padding:24px">地圖載入失敗，請確認網路連線。</div>';return}
+  if(!el.isConnected)return;
+  const m=footModel(),map=L.map(el),pts=[];
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  m.view.forEach(t=>t.p.forEach(p=>{
+    pts.push([p.la,p.lo]);
+    L.marker([p.la,p.lo],{icon:L.divIcon({className:'',html:`<div class="pin" style="background:${m.ci(t.id)};width:22px;height:22px;border-width:2px"></div>`,iconSize:[22,22],iconAnchor:[11,11]})}).addTo(map).bindPopup(`<b>${esc(p.n)}</b><br>${esc(t.n)}${p.d?'　'+esc(md(p.d)):''}`);
+  }));
+  if(pts.length)map.fitBounds(pts,{padding:[30,30],maxZoom:12});else map.setView([30,125],3);
+  S.fmap=map;
+}
+
 function tripStatus(i){
   if(!i||!i.start)return null;
   const today=ymd(new Date()),a=i.start,b=i.end&&i.end>=a?i.end:a;
@@ -311,8 +393,7 @@ function home(){
   const ts=allTrips().filter(t=>{const i=S.info[t.id];return !(i&&i!=='l'&&i.deleted)});
   return `<header><h1>${ICON}<span class="br">旅遊記帳</span></h1><button class="g" data-a="set">設定</button>${loginBtn()}</header><main>
   ${S.user?`<p class="sub">已登入：${esc(S.user.displayName||S.user.email)}，旅程會跟著帳號走</p>`:`<p class="sub">登入後換手機也找得回旅程。朋友用連結就能參與，不用登入。</p>`}
-  ${tripCards(ts)}
-  <button class="fab" data-a="newTrip">＋ 新增旅程</button></main>`;
+  ${homeTabs()}${S.hv=='foot'?footView():tripCards(ts)+deletedCards()+'<button class="fab" data-a="newTrip">＋ 新增旅程</button>'}</main>`;
 }
 function lab(e){
   if(e.status!='done')return `<span class="badge">待補充</span>`;
@@ -361,6 +442,7 @@ function render(){
   setDock();
   if(!S.tid)loadInfo();
   if(S.tid&&S.trip&&S.tab=='plan')setTimeout(initMini,0);
+  if(!S.tid&&S.hv=='foot')setTimeout(initFoot,0);
   if(S.tid&&S.trip&&!S.me&&!$('#sheet').classList.contains('on'))openWho();
 }
 
@@ -946,7 +1028,7 @@ function openSettings(){
   if(S.tid&&S.trip){
     h+=`<label>旅程資料</label><input id="tn2" value="${esc(S.trip.name)}" placeholder="旅程名稱"><input id="td2" value="${esc(S.trip.desc||'')}" placeholder="描述（選填）"><div class="row" style="gap:6px"><input id="ds" type="date" value="${esc(S.trip.start||'')}"><input id="de" type="date" value="${esc(S.trip.end||'')}"></div><label>預設記帳幣別</label><select id="tc2">${curOpts(S.trip.cur)}</select><div class="btns"><button data-a="saveTrip">儲存旅程資料</button><button class="g" data-a="cats">管理分類</button></div><div class="sub" style="margin-top:8px">照片用量：${mb(S.trip.photoBytes||0)} MB（這趟旅程上限 100 MB，照片都會壓縮到很小）</div>`;
     h+=`<label>匯率（換算成新台幣，預設只是大約值，請自行確認）</label>`+CURS.filter(c=>c!=BASE).map(c=>`<div class="row"><span><b>${c}</b> <small class="sub">${CN[c]||''}</small></span><input type="number" inputmode="decimal" step="any" class="rt" data-c="${c}" value="${rate(c).toFixed(4)}"></div>`).join('')+`<div class="btns"><button data-a="saveRates">儲存匯率</button></div>`;
-    h+=`<button class="d" data-a="delTrip" style="width:100%;margin-top:18px">刪除這趟旅程</button>`;
+    h+=`<label style="margin-top:18px">退出或刪除</label><button class="g" data-a="leaveTrip" style="width:100%">退出這趟旅程（只從我的清單移除）</button><div class="sub" style="margin:4px 4px 12px">旅伴中途不一起了、或你不想再看到這趟，請按這個。旅程和資料都還在，其他人照常使用，之後用連結隨時能再加入。</div><button class="d" data-a="delTrip" style="width:100%">刪除整趟旅程（所有人都看不到）</button>`;
   }
   sheet(h);
 }
@@ -960,6 +1042,10 @@ const act={
   newTrip:newTripSheet,
   close:closeSheet,
   set:openSettings,
+  hv:v=>{S.hv=v;S.fmap=null;render()},
+  fyear:v=>{S.fy=v;render()},
+  ftrip:v=>{S.ft=(S.ft==v)?null:v;render()},
+  frefresh:footRefresh,
   mems:id=>{
     const i=S.info[id],mem=i&&i!=='l'?(i.members||[]):[];
     sheet(`<h3>旅伴（${mem.length} 人）</h3><div>${mem.map(m=>`<span class="nm">${esc(m.name)}</span>`).join('')}</div><div class="btns"><button class="g" data-a="close">關閉</button></div>`);
@@ -1064,11 +1150,22 @@ const act={
       toast('已儲存');closeSheet();
     }catch(e){toast('儲存失敗：'+(e.code||e.message))}
   },
+  leaveTrip:async()=>{
+    if(!confirm('退出「'+S.trip.name+'」？\n只會從你的旅程清單移除，旅程和資料都還在，旅伴可以繼續使用。之後有連結隨時能再加入。'))return;
+    const id=S.tid;closeSheet();goHome();await dropFromList(id);render();toast('已退出');
+  },
   delTrip:async()=>{
-    if(!confirm('確定刪除「'+S.trip.name+'」？\n旅程會從所有人的首頁消失，資料先保留在雲端，之後還能復原。'))return;
+    const typed=(prompt('這會讓「所有旅伴」都看不到這趟旅程（資料先保留，之後可以復原）。\n如果只是你自己要離開，請取消，改按「退出這趟旅程」。\n\n確定要刪除，請輸入旅程名稱：'+S.trip.name)||'').trim();
+    if(!typed)return;
+    if(typed!==S.trip.name)return toast('名稱不一樣，沒有刪除');
     try{await updateDoc(doc(db,'trips',S.tid),{deleted:true});closeSheet();goHome()}
     catch(e){toast('刪除失敗：'+(e.code||e.message))}
   },
+  restoreId:async id=>{
+    try{await updateDoc(doc(db,'trips',id),{deleted:false});delete S.info[id];toast('已復原');render()}
+    catch(e){toast('復原失敗：'+(e.code||e.message))}
+  },
+  dropId:async id=>{if(!confirm('從你的清單移除這趟？（資料不會被刪掉）'))return;await dropFromList(id);render()},
   restoreTrip:async()=>{try{await updateDoc(doc(db,'trips',S.tid),{deleted:false});toast('已復原')}catch(e){toast('復原失敗：'+(e.code||e.message))}},
   cats:openCats,
   close2:closeSheet2,
@@ -1154,7 +1251,7 @@ const act={
   edit:id=>openForm(id),
   save:saveExp,
   who:openWho,
-  setMe:id=>{S.me=id;ls('tl_me_'+S.tid,id);closeSheet();render()},
+  setMe:id=>{S.me=id;ls('tl_me_'+S.tid,id);closeSheet();footRecord();render()},
   addMe:async()=>{
     const n=$('#nn').value.trim();if(!n)return toast('請輸入名字');
     const id='m'+Date.now().toString(36);
