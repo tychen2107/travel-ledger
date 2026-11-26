@@ -330,36 +330,77 @@ async function footRefresh(){
   }
   footSave(c);S.fskip=skipped;toast('已更新 '+ok+' 趟旅程'+(skipped?'，'+skipped+' 趟沒選過「我是誰」所以略過':''));render();
 }
+const flag=cc=>(cc&&cc.length==2&&cc!='??')?String.fromCodePoint(...[...cc.toUpperCase()].map(ch=>127397+ch.charCodeAt(0))):'🏳️';
+const ccCache=()=>{try{return JSON.parse(ls('tl_cc')||'{}')||{}}catch(e){return {}}};
+let resolving=false;
+async function footResolve(){
+  if(resolving)return;
+  const c0=footCache();if(!Object.values(c0).some(t=>(t.p||[]).some(p=>!p.cc)))return;
+  resolving=true;
+  try{
+    const c=footCache(),cc=ccCache();let changed=false,n=0;
+    for(const id in c)for(const p of (c[id].p||[])){
+      if(p.cc)continue;
+      const k=(Math.round(p.la*4)/4)+','+(Math.round(p.lo*4)/4);
+      if(cc[k]){p.cc=cc[k].cc;p.cn=cc[k].cn;changed=true;continue}
+      if(n>=25)continue;n++;
+      try{
+        const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=3&accept-language=zh-TW&lat='+p.la+'&lon='+p.lo),j=await r.json();
+        const v=(j&&j.address&&j.address.country_code)?{cc:j.address.country_code.toLowerCase(),cn:j.address.country||''}:{cc:'??',cn:'未知'};
+        cc[k]=v;p.cc=v.cc;p.cn=v.cn;changed=true;ls('tl_cc',JSON.stringify(cc));
+        await new Promise(r=>setTimeout(r,1100));
+      }catch(e){break}
+    }
+    if(changed){footSave(c);if(!S.tid&&S.hv=='foot')render()}
+  }finally{resolving=false}
+}
 function footModel(){
   const c=footCache(),trips=Object.entries(c).map(([id,v])=>({id,...v})).filter(t=>t.p&&t.p.length).sort((a,b)=>(a.s||'').localeCompare(b.s||''));
+  const cm={};let pending=0;
+  trips.forEach(t=>t.p.forEach(p=>{if(!p.cc)pending++;else if(p.cc!='??'){(cm[p.cc]=cm[p.cc]||{cc:p.cc,cn:p.cn||p.cc.toUpperCase(),n:0}).n++}}));
+  const countries=Object.values(cm).sort((a,b)=>b.n-a.n);
   const yr=(p,t)=>((p.d||t.s||'')+'').slice(0,4);
   const years=[...new Set(trips.flatMap(t=>t.p.map(p=>yr(p,t))).filter(Boolean))].sort();
   const fy=years.includes(S.fy)?S.fy:'all';
-  let view=trips.map(t=>({...t,p:t.p.filter(p=>fy=='all'||yr(p,t)==fy)})).filter(t=>t.p.length);
+  if(S.fc&&!cm[S.fc])S.fc=null;
+  let view=trips.map(t=>({...t,p:t.p.filter(p=>(fy=='all'||yr(p,t)==fy)&&(!S.fc||p.cc==S.fc))})).filter(t=>t.p.length);
   if(S.ft&&view.some(t=>t.id==S.ft))view=view.filter(t=>t.id==S.ft);else S.ft=null;
   const ci=id=>PAL[Math.max(0,trips.findIndex(t=>t.id==id))%PAL.length];
-  return {trips,view,years,fy,ci,total:view.reduce((a,t)=>a+t.p.length,0)};
+  return {trips,view,years,fy,ci,countries,pending,total:view.reduce((a,t)=>a+t.p.length,0)};
 }
 const homeTabs=()=>`<div class="tabs" style="margin:6px 0 12px"><button class="${S.hv=='foot'?'g':''}" data-a="hv" data-v="trips">旅程</button><button class="${S.hv=='foot'?'':'g'}" data-a="hv" data-v="foot">足跡</button></div>`;
 function footView(){
-  const m=footModel();
+  const m=footModel(),N=m.countries.length;
   const chip=(k,t)=>`<button class="${m.fy==k?'':'g'}" data-a="fyear" data-v="${k}">${t}</button>`;
+  const title=([[20,'世界公民'],[10,'環遊達人'],[5,'小小旅行家'],[3,'旅行新手'],[1,'起步旅人']].find(t=>N>=t[0])||[0,'還沒出發'])[1],next=[1,3,5,10,20,30,50].find(x=>x>N);
+  const ach=`<div class="card"><div class="row" style="margin:0"><b style="font-size:20px">累積去過 ${N} 個國家／地區</b><span class="pill">${title}</span></div>${N?`<div style="margin-top:8px">${m.countries.map(c=>`<button class="${S.fc==c.cc?'':'g'}" style="padding:4px 12px;margin:3px 4px 3px 0;font-size:15px" data-a="fcountry" data-v="${c.cc}">${flag(c.cc)} ${esc(c.cn)} · ${c.n}</button>`).join('')}</div>${next?`<div class="sub" style="margin-top:6px">再 ${next-N} 個就達成 ${next} 個國家／地區！</div>`:''}`:'<div class="sub" style="margin-top:6px">在行程裡勾「我去過了」，或按右下角「＋」新增以前去過的地方，就會開始累積。</div>'}${m.pending?`<div class="sub" style="margin-top:6px">還有 ${m.pending} 個地方正在查是哪個國家…</div>`:''}</div>`;
+  const man=(footCache().manual||{p:[]}).p||[];
   const body=m.view.length?`<div class="card" style="padding:8px"><div id="fmap"></div></div>
   <div class="card">${m.view.map(t=>`<button class="stp" style="width:100%;padding:6px 8px" data-a="ftrip" data-v="${t.id}"><div class="row" style="margin:0"><span><i class="dot" style="background:${m.ci(t.id)}"></i><b>${esc(t.n)}</b></span><span class="amt">${t.p.length} 個</span></div><div class="sub">${t.s?esc(fmtRange(t.s,null))+' · ':''}${esc(t.p.map(p=>p.n).join('、'))}</div></button>`).join('')}${S.ft?'<div class="sub" style="margin:4px 8px">再點一次可以回到全部</div>':''}</div>`
-  :`<div class="card sub">還沒有足跡。在旅程的行程裡勾選「我去過了」，而且景點有設定地圖位置，就會出現在這裡。</div>`;
-  return `<div class="sub" style="margin:0 4px 8px"><b>我的足跡</b>　去過 ${m.total} 個地方，${m.view.length} 趟旅程</div>${m.years.length>1?`<div class="chips">${chip('all','全部')}${m.years.map(y=>chip(y,y)).join('')}</div>`:''}${body}
-  <div class="row" style="margin:6px 4px 0"><span class="sub" style="font-size:14px">打開旅程時會自動更新；${S.user?'登入中，換手機也看得到。':'登入後換手機也看得到。'}${S.fskip?' 有 '+S.fskip+' 趟沒選過「我是誰」，沒算進來。':''}</span><button class="g" style="flex:none;padding:6px 14px;font-size:15px" data-a="frefresh">更新全部</button></div>`;
+  :`<div class="card sub">這個條件下沒有足跡。</div>`;
+  const mine=man.length?`<div class="card"><b>自己新增的足跡</b>${man.map(p=>`<div class="row" style="margin:6px 0 0"><div>${flag(p.cc)} ${esc(p.n)}${p.d?' · '+esc(p.d):''}${p.note?`<div class="sub">${esc(p.note)}</div>`:''}</div><button class="d" style="flex:none;padding:3px 12px;font-size:14px" data-a="fdel" data-v="${p.id}">刪除</button></div>`).join('')}</div>`:'';
+  return `${ach}${m.years.length>1?`<div class="chips">${chip('all','全部')}${m.years.map(y=>chip(y,y)).join('')}</div>`:''}${body}${mine}
+  <div class="row" style="margin:6px 4px 0"><span class="sub" style="font-size:14px">打開旅程時會自動更新；${S.user?'登入中，換手機也看得到。':'登入後換手機也看得到。'}${S.fskip?' 有 '+S.fskip+' 趟沒選過「我是誰」，沒算進來。':''}</span><button class="g" style="flex:none;padding:6px 14px;font-size:15px" data-a="frefresh">更新全部</button></div><button class="fab" data-a="fadd">＋ 新增足跡</button>`;
+}
+function openFootAdd(){
+  S.fm={sel:null};S.fr=[];
+  sheet(`<h3>新增以前去過的地方</h3><div class="sub" style="margin-bottom:8px">只記到城市或地區就好，不用精準到景點，地圖上的圖釘也會是大約的位置。</div>
+  <label>地方（城市、地區或景點名稱）</label><div class="row" style="gap:6px"><input id="fq" placeholder="例如：台北、京都、首爾"><button data-a="fsearch" style="flex:none;padding:10px 16px">搜尋</button></div>
+  <div id="fres"></div><div id="fsel" class="sub">還沒有選擇地方</div>
+  <label>年份（選填）</label><input id="fyr" type="number" inputmode="numeric" placeholder="例如：2019">
+  <label>備註（選填）</label><input id="fnote" placeholder="例如：和家人一起去">
+  <div class="btns"><button class="g" data-a="close">取消</button><button data-a="fsave">加入足跡</button></div>`);
 }
 async function initFoot(){
   const el=$('#fmap');if(!el)return;
   try{S.fmap&&S.fmap.remove()}catch(e){}S.fmap=null;
   try{await loadLeaflet()}catch(e){el.innerHTML='<div class="sub" style="padding:24px">地圖載入失敗，請確認網路連線。</div>';return}
   if(!el.isConnected)return;
-  const m=footModel(),map=L.map(el),pts=[];
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  const m=footModel(),map=L.map(el,MAPOPT),pts=[];
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,noWrap:true,attribution:'© OpenStreetMap'}).addTo(map);
   m.view.forEach(t=>t.p.forEach(p=>{
     pts.push([p.la,p.lo]);
-    L.marker([p.la,p.lo],{icon:L.divIcon({className:'',html:`<div class="pin" style="background:${m.ci(t.id)};width:22px;height:22px;border-width:2px"></div>`,iconSize:[22,22],iconAnchor:[11,11]})}).addTo(map).bindPopup(`<b>${esc(p.n)}</b><br>${esc(t.n)}${p.d?'　'+esc(md(p.d)):''}`);
+    L.marker([p.la,p.lo],{icon:L.divIcon({className:'',html:`<div class="pin" style="background:${m.ci(t.id)};width:22px;height:22px;border-width:2px"></div>`,iconSize:[22,22],iconAnchor:[11,11]})}).addTo(map).bindPopup(`<b>${esc(p.n)}</b><br>${esc(t.n)}${p.d?'　'+esc(/^\d{4}-/.test(p.d)?md(p.d):p.d):''}`);
   }));
   if(pts.length)map.fitBounds(pts,{padding:[30,30],maxZoom:12});else map.setView([30,125],3);
   S.fmap=map;
@@ -442,7 +483,7 @@ function render(){
   setDock();
   if(!S.tid)loadInfo();
   if(S.tid&&S.trip&&S.tab=='plan')setTimeout(initMini,0);
-  if(!S.tid&&S.hv=='foot')setTimeout(initFoot,0);
+  if(!S.tid&&S.hv=='foot'){setTimeout(initFoot,0);setTimeout(footResolve,400)}
   if(S.tid&&S.trip&&!S.me&&!$('#sheet').classList.contains('on'))openWho();
 }
 
@@ -540,6 +581,7 @@ function planView(){
   }).join(''):`<div class="card sub">這天還沒有行程，按右下角「＋」新增。</div>`;
   return chips+head+filt+mini+body+`<div class="sub" style="margin:4px 6px 0">勾選代表「我去過了」，只會顯示你自己的勾選。</div>`+fab;
 }
+const MAPOPT={minZoom:2,maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1};
 function loadLeaflet(){
   if(window.L)return Promise.resolve();
   return new Promise((res,rej)=>{
@@ -562,8 +604,8 @@ async function drawMap(box,sel){
     aps.filter(x=>x.k=='dep').forEach(x=>{ap[x.id]=x;seq.push([x.lat,x.lng])});
     if(seq.length>1)line[d]={col,a:seq};
   });
-  const map=L.map(box);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  const map=L.map(box,MAPOPT);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,noWrap:true,attribution:'© OpenStreetMap'}).addTo(map);
   pts.forEach(({p,n,col})=>{
     const mine=!!p.visited?.[S.me];
     L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div class="pin${mine?' v':''}" style="background:${col};color:#fff">${n}</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${esc((p.date?dayLabel(p.date):'')+' '+(p.time||''))}`);
@@ -1043,6 +1085,38 @@ const act={
   close:closeSheet,
   set:openSettings,
   hv:v=>{S.hv=v;S.fmap=null;render()},
+  fadd:openFootAdd,
+  fcountry:v=>{S.fc=(S.fc==v)?null:v;S.ft=null;render()},
+  fsearch:async()=>{
+    const q=($('#fq').value||'').trim();if(!q)return toast('先輸入地方');
+    const box=$('#fres');box.innerHTML='<div class="sub">搜尋中…</div>';
+    try{
+      const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&accept-language=zh-TW&q='+encodeURIComponent(q));
+      S.fr=await r.json();
+      box.innerHTML=S.fr.length?S.fr.map((x,i)=>`<button class="card trip" style="padding:10px 14px;font-size:15px" data-a="fpick" data-v="${i}">${esc(x.display_name)}</button>`).join(''):'<div class="sub">找不到，換個寫法試試（例如加上國家）。</div>';
+    }catch(e){box.innerHTML='<div class="sub">搜尋失敗，請稍後再試。</div>'}
+  },
+  fpick:i=>{
+    const x=S.fr[+i];if(!x)return;
+    const a=x.address||{},region=a.city||a.town||a.village||a.municipality||a.state||a.county||(x.display_name||'').split(',')[0];
+    S.fm.sel={n:region,cc:(a.country_code||'??').toLowerCase(),cn:a.country||'',la:Math.round(+x.lat*10)/10,lo:Math.round(+x.lon*10)/10};
+    $('#fsel').textContent='已選：'+flag(S.fm.sel.cc)+' '+(S.fm.sel.cn?S.fm.sel.cn+' · ':'')+region+'（大約位置）';$('#fres').innerHTML='';
+  },
+  fsave:()=>{
+    const sel=S.fm&&S.fm.sel;if(!sel)return toast('先搜尋並選一個地方');
+    const y=($('#fyr').value||'').trim();
+    if(y&&!(+y>=1900&&+y<=new Date().getFullYear()+1))return toast('年份看起來不對');
+    const c=footCache(),m=c.manual||{n:'以前去過的地方',s:null,p:[]};
+    m.p.push({id:'f'+Date.now().toString(36),n:sel.n,la:sel.la,lo:sel.lo,cc:sel.cc,cn:sel.cn,d:y||null,note:($('#fnote').value||'').trim()||null});
+    m.t=Date.now();c.manual=m;footSave(c);closeSheet();toast('已加入足跡');render();
+  },
+  fdel:id=>{
+    if(!confirm('刪除這筆足跡？'))return;
+    const c=footCache();if(!c.manual)return;
+    c.manual.p=c.manual.p.filter(x=>x.id!=id);c.manual.t=Date.now();
+    if(!c.manual.p.length)delete c.manual;
+    footSave(c);render();
+  },
   fyear:v=>{S.fy=v;render()},
   ftrip:v=>{S.ft=(S.ft==v)?null:v;render()},
   frefresh:footRefresh,
